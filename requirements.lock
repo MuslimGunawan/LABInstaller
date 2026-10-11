@@ -1,0 +1,16 @@
+# Pinned production runtime dependencies for system/runtime/site-packages
+# generated for Lab Auto Installer Windows x64
+customtkinter==5.2.2
+darkdetect==0.8.0
+jsonschema==4.23.0
+jsonschema-specifications==2023.12.1
+referencing==0.35.1
+rpds-py==0.20.0
+attrs==24.2.0
+
+# Dev & CI dependencies (only used in testing & CI runners)
+pytest==8.3.4
+pytest-cov==6.0.0
+ruff==0.8.4
+mypy==1.13.0
+types-jsonschema==4.23.0.20241208

@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LocalConfigSchema",
+  "type": "object",
+  "properties": {
+    "sembunyikanFolderSistem": { "type": "boolean" },
+    "lokasiCacheBersama": { "type": ["string", "null"] },
+    "lokasiPayload": { "type": ["string", "null"] },
+    "proxy": { "type": ["string", "null"] },
+    "theme": { "type": "string", "enum": ["system", "dark", "light"] },
+    "checkUpdateIntervalHours": { "type": "integer", "minimum": 1 },
+    "updateChannel": { "type": "string", "enum": ["stable", "beta"] },
+    "archivePasswords": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "phpProfile": { "type": "string", "enum": ["development", "production"] },
+    "testCredentials": {
+      "type": "object",
+      "properties": {
+        "mysqlUser": { "type": "string" },
+        "mysqlPassword": { "type": "string" }
+      }
+    }
+  }
+}

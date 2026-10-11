@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PortsSchema",
+  "type": "object",
+  "required": ["services"],
+  "properties": {
+    "services": {
+      "type": "object",
+      "required": ["laragon", "xampp"],
+      "properties": {
+        "laragon": {
+          "type": "object",
+          "required": ["http", "https", "mysql"],
+          "properties": {
+            "http": { "type": "integer" },
+            "https": { "type": "integer" },
+            "mysql": { "type": "integer" }
+          }
+        },
+        "xampp": {
+          "type": "object",
+          "required": ["http", "https", "mysql"],
+          "properties": {
+            "http": { "type": "integer" },
+            "https": { "type": "integer" },
+            "mysql": { "type": "integer" }
+          }
+        }
+      }
+    }
+  }
+}

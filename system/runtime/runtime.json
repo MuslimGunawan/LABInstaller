@@ -1,0 +1,11 @@
+{
+  "runtimeVersion": "r1",
+  "pythonVersion": "3.13.15",
+  "architecture": "x64",
+  "builtAt": "2026-10-11",
+  "hasTkinter": true,
+  "requiredPackages": [
+    "customtkinter",
+    "jsonschema"
+  ]
+}

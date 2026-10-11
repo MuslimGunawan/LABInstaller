@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProfilesSchema",
+  "type": "object",
+  "required": ["profiles"],
+  "properties": {
+    "profiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "nama", "deskripsi", "apps"],
+        "properties": {
+          "id": { "type": "string" },
+          "nama": { "type": "string" },
+          "deskripsi": { "type": "string" },
+          "apps": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

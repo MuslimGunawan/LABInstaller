@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "manifestVersion": "r2026.10.11-1",
+  "bootVersion": "1.0.0",
+  "runtimeVersion": "r1",
+  "minSupportedVersion": "1.0.0",
+  "releaseDate": "2026-10-11",
+  "channel": "stable",
+  "disabled": false,
+  "releaseNotes": "Rilis perdana Lab Auto Installer: arsitektur portabel, GUI modern, engine pre-flight, dan dry-run.",
+  "packages": {
+    "app": {
+      "filename": "app-v1.0.0.zip",
+      "sha256": ""
+    },
+    "full": {
+      "filename": "LabInstaller-full-v1.0.0.zip",
+      "sha256": ""
+    }
+  }
+}

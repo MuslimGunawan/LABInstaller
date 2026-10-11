@@ -1,0 +1,788 @@
+{
+  "manifestVersion": "r2026.10.11-1",
+  "apps": [
+    {
+      "id": "vcredist",
+      "nama": "Microsoft Visual C++ 2015-2022 Redistributable (x64)",
+      "kategori": "Bahasa & Tools",
+      "metode": "exe",
+      "wingetId": "Microsoft.VCRedist.2015+.x64",
+      "versiTarget": "14.51.36247.0",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "registry",
+        "nilai": "HKLM\\SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\X64",
+        "polaVersi": "Version"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 25165824,
+      "sha256": "843068991daaa1f73ad9f6239bce4d0f6a07a51f18c37ea2a867e9beca71295c",
+      "silentArgs": "/quiet /norestart",
+      "arsip": null,
+      "uninstall": null,
+      "backupData": [],
+      "dependensi": [],
+      "hook": null,
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "vscode",
+      "nama": "Visual Studio Code (System x64)",
+      "kategori": "Editor & IDE",
+      "metode": "exe",
+      "wingetId": null,
+      "versiTarget": "1.141.0",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "file",
+        "nilai": "C:\\Program Files\\Microsoft VS Code\\Code.exe"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://vscode.download.prss.microsoft.com/dbazure/download/stable/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/VSCodeSetup-x64-1.141.0.exe",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 115343360,
+      "sha256": "1a898864f5ee9c234ae349a437b2198ec3e4008a9725491a28750750dbbf4c88",
+      "silentArgs": "/VERYSILENT /NORESTART /MERGETASKS=\"!runcode,desktopicon\"",
+      "arsip": null,
+      "uninstall": {
+        "metode": "custom",
+        "args": "/VERYSILENT /NORESTART",
+        "bersihkan": [
+          "C:\\Program Files\\Microsoft VS Code"
+        ]
+      },
+      "backupData": [],
+      "dependensi": [],
+      "hook": null,
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "temurin-jdk21",
+      "nama": "Eclipse Temurin JDK 21",
+      "kategori": "Bahasa & Tools",
+      "metode": "msi",
+      "wingetId": "EclipseAdoptium.Temurin.21.JDK",
+      "versiTarget": "21.0.12.101",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "command",
+        "nilai": "javac",
+        "argumen": "-version"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1+1/OpenJDK21U-jdk_x64_windows_hotspot_21.0.12.1_1.msi",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 178257920,
+      "sha256": "454cfd334b9ca91c96dd8c2de97fcef6b9f1f98be9172ff076711f1c6b44e4e0",
+      "silentArgs": "/qn /norestart ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome",
+      "arsip": null,
+      "uninstall": {
+        "metode": "msi",
+        "args": "/qn /norestart",
+        "bersihkan": []
+      },
+      "backupData": [],
+      "dependensi": [],
+      "hook": null,
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "netbeans",
+      "nama": "Apache NetBeans IDE",
+      "kategori": "Editor & IDE",
+      "metode": "exe",
+      "wingetId": "Apache.NetBeans",
+      "versiTarget": "25",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "file",
+        "nilai": "C:\\Program Files\\NetBeans-25\\bin\\netbeans64.exe"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://archive.apache.org/dist/netbeans/netbeans-installers/25/Apache-NetBeans-25-bin-windows-x64.exe",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 524288000,
+      "sha256": "c9abf083da621199f33174588b485ea64e0cf0a0572d8b8af6e10149be91146d",
+      "silentArgs": "--silent",
+      "arsip": null,
+      "uninstall": null,
+      "backupData": [],
+      "dependensi": [
+        "temurin-jdk21"
+      ],
+      "hook": null,
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "qgis",
+      "nama": "QGIS Desktop",
+      "kategori": "GIS",
+      "metode": "msi",
+      "wingetId": "OSGeo.QGIS",
+      "versiTarget": "4.2.2",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "file",
+        "nilai": "C:\\Program Files\\QGIS 4.2.2\\bin\\qgis-bin.exe"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://qgis.org/downloads/QGIS-OSGeo4W-4.2.2-1.msi",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 1258291200,
+      "sha256": "dda0db34626053027844f8f90a0acee614fe06fc56eb07d00e9da7f1447472b3",
+      "silentArgs": "/qn /norestart",
+      "arsip": null,
+      "uninstall": {
+        "metode": "msi",
+        "args": "/qn /norestart",
+        "bersihkan": []
+      },
+      "backupData": [],
+      "dependensi": [],
+      "hook": null,
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "git",
+      "nama": "Git for Windows",
+      "kategori": "Bahasa & Tools",
+      "metode": "exe",
+      "wingetId": "Git.Git",
+      "versiTarget": "2.55.0.5",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "command",
+        "nilai": "git",
+        "argumen": "--version"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.5/Git-2.55.0.5-64-bit.exe",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 65011712,
+      "sha256": "d065a4e23c3d9a6b5073d609b5be0830227ec3ca053c083ba385061ddfaf94c6",
+      "silentArgs": "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS",
+      "arsip": null,
+      "uninstall": null,
+      "backupData": [],
+      "dependensi": [],
+      "hook": null,
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "nodejs",
+      "nama": "Node.js LTS",
+      "kategori": "Bahasa & Tools",
+      "metode": "msi",
+      "wingetId": "OpenJS.NodeJS.LTS",
+      "versiTarget": "24.20.0",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "command",
+        "nilai": "node",
+        "argumen": "-v"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://nodejs.org/dist/v24.20.0/node-v24.20.0-x64.msi",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 33554432,
+      "sha256": "28b69132c35ccc033bf8f2a67cd10c9d75ef5822593363309da448f2afff2d8a",
+      "silentArgs": "/qn /norestart",
+      "arsip": null,
+      "uninstall": {
+        "metode": "msi",
+        "args": "/qn /norestart",
+        "bersihkan": []
+      },
+      "backupData": [],
+      "dependensi": [],
+      "hook": null,
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "python-user",
+      "nama": "Python 3.13 (Lab Environment)",
+      "kategori": "Bahasa & Tools",
+      "metode": "exe",
+      "wingetId": "Python.Python.3.13",
+      "versiTarget": "3.13.15",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "command",
+        "nilai": "python",
+        "argumen": "--version"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://www.python.org/ftp/python/3.13.15/python-3.13.15-amd64.exe",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 28311552,
+      "sha256": "edec09c4853aeae9ac36efb8c9f95b6b8e2fee65eee56d9767a8b7c69c574403",
+      "silentArgs": "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 SimpleInstall=1",
+      "arsip": null,
+      "uninstall": null,
+      "backupData": [],
+      "dependensi": [],
+      "hook": null,
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "7zip",
+      "nama": "7-Zip File Manager",
+      "kategori": "Bahasa & Tools",
+      "metode": "msi",
+      "wingetId": "7zip.7zip",
+      "versiTarget": "26.04",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "file",
+        "nilai": "C:\\Program Files\\7-Zip\\7zFM.exe"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://www.7-zip.org/a/7z2604-x64.msi",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 1887436,
+      "sha256": "0b01334a418654293513449f61d6bfc99e5196ca371e3c3dc961eda57cd535c6",
+      "silentArgs": "/qn /norestart",
+      "arsip": null,
+      "uninstall": {
+        "metode": "msi",
+        "args": "/qn /norestart",
+        "bersihkan": []
+      },
+      "backupData": [],
+      "dependensi": [],
+      "hook": null,
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "winrar",
+      "nama": "WinRAR Archiver",
+      "kategori": "Bahasa & Tools",
+      "metode": "exe",
+      "wingetId": "RARLab.WinRAR",
+      "versiTarget": "7.23.0",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "file",
+        "nilai": "C:\\Program Files\\WinRAR\\WinRAR.exe"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://www.rarlab.com/rar/winrar-x64-723.exe",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 3670016,
+      "sha256": "8ff0daf3ed564cc743c0e23ff2e253997ffc74460f9673f0b6dd037b2db4ce7b",
+      "silentArgs": "/s",
+      "arsip": null,
+      "uninstall": null,
+      "backupData": [],
+      "dependensi": [],
+      "hook": null,
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "laragon",
+      "nama": "Laragon 6 WAMP Stack",
+      "kategori": "Web Stack",
+      "metode": "exe",
+      "wingetId": null,
+      "versiTarget": "6.0.0",
+      "kebijakanVersi": "exact",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "file",
+        "nilai": "C:\\laragon\\laragon.exe"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://github.com/leokhoa/laragon/releases/download/6.0.0/laragon-wamp.exe",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 181328369,
+      "sha256": "333a8eaa06b0d4078027deec2e04fb59c8bbdc06c03398c9253e637aeb2c00d8",
+      "silentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=\"C:\\laragon\"",
+      "arsip": null,
+      "uninstall": {
+        "metode": "custom",
+        "args": "/VERYSILENT",
+        "bersihkan": [
+          "C:\\laragon\\bin"
+        ]
+      },
+      "backupData": [
+        "C:\\laragon\\www",
+        "C:\\laragon\\data"
+      ],
+      "dependensi": [
+        "vcredist"
+      ],
+      "hook": "laragon",
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "xampp",
+      "nama": "XAMPP Stack (Port 8080/3307)",
+      "kategori": "Web Stack",
+      "metode": "exe",
+      "wingetId": "ApacheFriends.Xampp.8.2",
+      "versiTarget": "8.2.12-0",
+      "kebijakanVersi": "exact-minor",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "file",
+        "nilai": "C:\\xampp\\xampp-control.exe"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://sourceforge.net/projects/xampp/files/XAMPP%20Windows/8.2.12/xampp-windows-x64-8.2.12-0-VS16-installer.exe",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 157286400,
+      "sha256": "12e818ce5aec79fe646606df3a80b35da865ec0213646ad7c92044dcfcec7535",
+      "silentArgs": "--mode unattended --unattendedmodeui none --prefix C:\\xampp",
+      "arsip": null,
+      "uninstall": {
+        "metode": "custom",
+        "args": "--mode unattended",
+        "bersihkan": [
+          "C:\\xampp\\apache",
+          "C:\\xampp\\mysql",
+          "C:\\xampp\\php"
+        ]
+      },
+      "backupData": [
+        "C:\\xampp\\htdocs",
+        "C:\\xampp\\mysql\\data"
+      ],
+      "dependensi": [
+        "vcredist"
+      ],
+      "hook": "xampp",
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "php-standalone",
+      "nama": "PHP 8.5.11 Standalone (C:\\php)",
+      "kategori": "Web Stack",
+      "metode": "arsip",
+      "wingetId": null,
+      "versiTarget": "8.5.11",
+      "kebijakanVersi": "exact",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "file",
+        "nilai": "C:\\php\\php.exe"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://downloads.php.net/~windows/releases/archives/php-8.5.11-nts-Win32-vs17-x64.zip",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 36049387,
+      "sha256": "0ea96e0d2b9b737a6036f05cf4e95c49313faa6d0f27bd97edb2742503f0c043",
+      "silentArgs": null,
+      "arsip": {
+        "format": "zip",
+        "bagian": [
+          "php-8.5.11-nts-Win32-vs17-x64.zip"
+        ],
+        "passwordRef": null,
+        "ukuranEkstrak": 115343360,
+        "isiDiharapkan": [
+          "php.exe",
+          "php.ini-development",
+          "ext\\php_curl.dll"
+        ],
+        "lanjutan": {
+          "tipe": "salin",
+          "berkas": "",
+          "args": "",
+          "tujuan": "C:\\php"
+        }
+      },
+      "uninstall": {
+        "metode": "custom",
+        "args": "",
+        "bersihkan": [
+          "C:\\php"
+        ]
+      },
+      "backupData": [
+        "C:\\php\\php.ini"
+      ],
+      "dependensi": [
+        "vcredist"
+      ],
+      "hook": "php",
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "composer",
+      "nama": "Composer Package Manager",
+      "kategori": "Web Stack",
+      "metode": "exe",
+      "wingetId": null,
+      "versiTarget": "2.10.3",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "command",
+        "nilai": "composer",
+        "argumen": "-V"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://getcomposer.org/download/latest-stable/composer.phar",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 3355443,
+      "sha256": "7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6",
+      "silentArgs": null,
+      "arsip": null,
+      "uninstall": {
+        "metode": "custom",
+        "args": "",
+        "bersihkan": [
+          "C:\\composer"
+        ]
+      },
+      "backupData": [],
+      "dependensi": [
+        "php-standalone"
+      ],
+      "hook": "composer",
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "laravel-installer",
+      "nama": "Laravel CLI Installer",
+      "kategori": "Web Stack",
+      "metode": "hook-only",
+      "wingetId": null,
+      "versiTarget": "latest",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "command",
+        "nilai": "laravel",
+        "argumen": "--version"
+      },
+      "sumber": [],
+      "ukuran": 0,
+      "sha256": null,
+      "silentArgs": null,
+      "arsip": null,
+      "uninstall": null,
+      "backupData": [],
+      "dependensi": [
+        "composer"
+      ],
+      "hook": "composer_laravel",
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "arduino-ide",
+      "nama": "Arduino IDE 2.x",
+      "kategori": "Bahasa & Tools",
+      "metode": "msi",
+      "wingetId": "ArduinoSA.IDE.stable",
+      "versiTarget": "2.3.10",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "file",
+        "nilai": "C:\\Program Files\\Arduino IDE\\Arduino IDE.exe"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://github.com/arduino/arduino-ide/releases/download/2.3.10/arduino-ide_2.3.10_Windows_64bit.msi",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 188743680,
+      "sha256": "aebbd1efeac5cfb02a6cad0d93af8221054fc983a5b3c5ce6da8a6bfb9425165",
+      "silentArgs": "/qn /norestart",
+      "arsip": null,
+      "uninstall": {
+        "metode": "msi",
+        "args": "/qn /norestart",
+        "bersihkan": []
+      },
+      "backupData": [],
+      "dependensi": [],
+      "hook": null,
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "cisco-packet-tracer",
+      "nama": "Cisco Packet Tracer",
+      "kategori": "Bahasa & Tools",
+      "metode": "exe",
+      "wingetId": null,
+      "versiTarget": "8.3.0",
+      "kebijakanVersi": "exact-minor",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "file",
+        "nilai": "C:\\Program Files\\Cisco Packet Tracer 8.3.0\\bin\\PacketTracer.exe"
+      },
+      "sumber": [
+        {
+          "tipe": "gdrive",
+          "url": null,
+          "fileId": "ISI_FILE_ID_GDRIVE",
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 314572800,
+      "sha256": "MEMERLUKAN_HASH_DARI_ADMIN",
+      "silentArgs": "/VERYSILENT /NORESTART",
+      "arsip": null,
+      "uninstall": null,
+      "backupData": [],
+      "dependensi": [],
+      "hook": null,
+      "statusSumber": "menunggu-hosting"
+    },
+    {
+      "id": "vs-community",
+      "nama": "Visual Studio Community 2022 (C++ Desktop)",
+      "kategori": "Flutter",
+      "metode": "exe",
+      "wingetId": "Microsoft.VisualStudio.2022.Community",
+      "versiTarget": "17.14.41",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "file",
+        "nilai": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\devenv.exe"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://aka.ms/vs/17/release/vs_community.exe",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 4194304,
+      "sha256": "7041ccc4d8d52901e386b0d96d9f11394244fb2b09fc6aae2c573f16c20ccdcc",
+      "silentArgs": "--add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended --quiet --norestart --wait",
+      "arsip": null,
+      "uninstall": null,
+      "backupData": [],
+      "dependensi": [],
+      "hook": null,
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "android-studio",
+      "nama": "Android Studio",
+      "kategori": "Flutter",
+      "metode": "exe",
+      "wingetId": "Google.AndroidStudio",
+      "versiTarget": "2026.2.1.8",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "file",
+        "nilai": "C:\\Program Files\\Android\\Android Studio\\bin\\studio64.exe"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://edgedl.me.gvt1.com/android/studio/install/2026.2.1.8/android-studio-rabbit1-windows.exe",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 1181116006,
+      "sha256": "4c26f92e0e78adb1381c9a76597dbd5f6bce13d2ff2bf88cd2b57d425d685f3d",
+      "silentArgs": "/S",
+      "arsip": null,
+      "uninstall": null,
+      "backupData": [],
+      "dependensi": [
+        "temurin-jdk21"
+      ],
+      "hook": "android_studio",
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "android-cmdline-tools",
+      "nama": "Android SDK & Tools (C:\\Android\\Sdk)",
+      "kategori": "Flutter",
+      "metode": "arsip",
+      "wingetId": null,
+      "versiTarget": "15859902",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "file",
+        "nilai": "C:\\Android\\Sdk\\cmdline-tools\\latest\\bin\\sdkmanager.bat"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://dl.google.com/android/repository/commandlinetools-win-15859902_latest.zip",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 163263488,
+      "sha256": "90ae805d20434428bffcb699c290860f19bb5f66a67e6b330067e3de801fb04a",
+      "silentArgs": null,
+      "arsip": {
+        "format": "zip",
+        "bagian": [
+          "commandlinetools-win-15859902_latest.zip"
+        ],
+        "passwordRef": null,
+        "ukuranEkstrak": 419430400,
+        "isiDiharapkan": [
+          "cmdline-tools\\bin\\sdkmanager.bat"
+        ],
+        "lanjutan": {
+          "tipe": "salin",
+          "berkas": "",
+          "args": "",
+          "tujuan": "C:\\Android\\Sdk\\cmdline-tools\\latest"
+        }
+      },
+      "uninstall": null,
+      "backupData": [],
+      "dependensi": [
+        "temurin-jdk21"
+      ],
+      "hook": "android_sdk",
+      "statusSumber": "tersedia"
+    },
+    {
+      "id": "flutter-sdk",
+      "nama": "Flutter SDK (C:\\src\\flutter)",
+      "kategori": "Flutter",
+      "metode": "arsip",
+      "wingetId": null,
+      "versiTarget": "3.47.7",
+      "kebijakanVersi": "minimum",
+      "scope": "machine",
+      "deteksi": {
+        "tipe": "command",
+        "nilai": "flutter",
+        "argumen": "--version"
+      },
+      "sumber": [
+        {
+          "tipe": "resmi",
+          "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_3.47.7-stable.zip",
+          "fileId": null,
+          "prioritas": 1
+        }
+      ],
+      "ukuran": 1181116006,
+      "sha256": "c2c875da25a1a1448d18ee4e8f398b2f6fce888b4775d8f9130538e16d826cb4",
+      "silentArgs": null,
+      "arsip": {
+        "format": "zip",
+        "bagian": [
+          "flutter_windows_3.47.7-stable.zip"
+        ],
+        "passwordRef": null,
+        "ukuranEkstrak": 3145728000,
+        "isiDiharapkan": [
+          "flutter\\bin\\flutter.bat"
+        ],
+        "lanjutan": {
+          "tipe": "salin",
+          "berkas": "",
+          "args": "",
+          "tujuan": "C:\\src\\flutter"
+        }
+      },
+      "uninstall": null,
+      "backupData": [],
+      "dependensi": [
+        "git",
+        "vcredist",
+        "vs-community",
+        "android-cmdline-tools"
+      ],
+      "hook": "flutter",
+      "statusSumber": "tersedia"
+    }
+  ]
+}

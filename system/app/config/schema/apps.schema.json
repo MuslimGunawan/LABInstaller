@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AppsManifestSchema",
+  "type": "object",
+  "required": ["manifestVersion", "apps"],
+  "properties": {
+    "manifestVersion": {
+      "type": "string"
+    },
+    "apps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "nama",
+          "kategori",
+          "metode",
+          "versiTarget",
+          "kebijakanVersi",
+          "deteksi"
+        ],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-zA-Z0-9_-]+$" },
+          "nama": { "type": "string" },
+          "kategori": { "type": "string" },
+          "metode": {
+            "type": "string",
+            "enum": ["winget", "exe", "msi", "arsip", "hook-only"]
+          },
+          "wingetId": { "type": ["string", "null"] },
+          "versiTarget": { "type": "string" },
+          "kebijakanVersi": {
+            "type": "string",
+            "enum": ["exact", "exact-minor", "minimum"]
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["machine", "user"]
+          },
+          "deteksi": {
+            "type": "object",
+            "required": ["tipe", "nilai"],
+            "properties": {
+              "tipe": { "type": "string", "enum": ["registry", "file", "command"] },
+              "nilai": { "type": "string" },
+              "argumen": { "type": "string" },
+              "polaVersi": { "type": "string" }
+            }
+          },
+          "sumber": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["tipe", "prioritas"],
+              "properties": {
+                "tipe": { "type": "string", "enum": ["cache", "share", "resmi", "gdrive"] },
+                "url": { "type": ["string", "null"] },
+                "fileId": { "type": ["string", "null"] },
+                "prioritas": { "type": "integer", "minimum": 1 }
+              }
+            }
+          },
+          "ukuran": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": ["string", "null"] },
+          "silentArgs": { "type": ["string", "null"] },
+          "arsip": {
+            "type": ["object", "null"],
+            "properties": {
+              "format": { "type": "string", "enum": ["zip", "rar", "7z"] },
+              "bagian": { "type": "array", "items": { "type": "string" } },
+              "passwordRef": { "type": ["string", "null"] },
+              "ukuranEkstrak": { "type": "integer", "minimum": 0 },
+              "isiDiharapkan": { "type": "array", "items": { "type": "string" } },
+              "lanjutan": {
+                "type": "object",
+                "required": ["tipe"],
+                "properties": {
+                  "tipe": { "type": "string", "enum": ["installer", "msi", "salin", "hook"] },
+                  "berkas": { "type": "string" },
+                  "args": { "type": "string" },
+                  "tujuan": { "type": "string" }
+                }
+              }
+            }
+          },
+          "uninstall": {
+            "type": ["object", "null"],
+            "properties": {
+              "metode": { "type": "string", "enum": ["quiet-string", "winget", "msi", "custom"] },
+              "args": { "type": "string" },
+              "bersihkan": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "backupData": { "type": "array", "items": { "type": "string" } },
+          "dependensi": { "type": "array", "items": { "type": "string" } },
+          "hook": { "type": ["string", "null"] },
+          "statusSumber": {
+            "type": "string",
+            "enum": ["tersedia", "menunggu-hosting", "butuh-layout"]
+          }
+        }
+      }
+    }
+  }
+}

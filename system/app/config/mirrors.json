@@ -1,0 +1,28 @@
+{
+  "version": "1.0.0",
+  "files": [
+    {
+      "appId": "cisco-packet-tracer",
+      "filename": "CiscoPacketTracer_830_Windows_64bit.exe",
+      "size": 314572800,
+      "sha256": "MEMERLUKAN_HASH_DARI_ADMIN",
+      "hashDariAdmin": true,
+      "gdriveFileIds": [
+        "ISI_FILE_ID_GDRIVE_1",
+        "ISI_FILE_ID_GDRIVE_2",
+        "ISI_FILE_ID_GDRIVE_3",
+        "ISI_FILE_ID_GDRIVE_4"
+      ]
+    },
+    {
+      "appId": "laragon-custom-bin",
+      "filename": "laragon-custom-bin.zip",
+      "size": 0,
+      "sha256": "MEMERLUKAN_HASH_DARI_ADMIN",
+      "hashDariAdmin": true,
+      "gdriveFileIds": [
+        "ISI_FILE_ID_GDRIVE_1"
+      ]
+    }
+  ]
+}

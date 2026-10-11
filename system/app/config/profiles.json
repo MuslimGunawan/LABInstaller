@@ -1,0 +1,89 @@
+{
+  "profiles": [
+    {
+      "id": "web",
+      "nama": "Lab Pemrograman Web",
+      "deskripsi": "Paket web stack lengkap: VS Code, Git, Node.js, Laragon 6, XAMPP, PHP 8.5, Composer, dan Laravel.",
+      "apps": [
+        "vcredist",
+        "vscode",
+        "git",
+        "nodejs",
+        "laragon",
+        "xampp",
+        "php-standalone",
+        "composer",
+        "laravel-installer"
+      ]
+    },
+    {
+      "id": "flutter",
+      "nama": "Lab Mobile & Flutter",
+      "deskripsi": "Paket flutter lengkap: VS Code, Git, Visual Studio C++, Android Studio, Android SDK, dan Flutter SDK.",
+      "apps": [
+        "vcredist",
+        "vscode",
+        "git",
+        "temurin-jdk21",
+        "vs-community",
+        "android-studio",
+        "android-cmdline-tools",
+        "flutter-sdk"
+      ]
+    },
+    {
+      "id": "gis",
+      "nama": "Lab GIS & Geospasial",
+      "deskripsi": "Paket sistem informasi geografis: QGIS Desktop, Python 3, VS Code, dan utilitas pendukung.",
+      "apps": [
+        "vcredist",
+        "vscode",
+        "python-user",
+        "qgis",
+        "7zip"
+      ]
+    },
+    {
+      "id": "dasar",
+      "nama": "Lab Pemrograman Dasar",
+      "deskripsi": "Paket mata kuliah dasar: VS Code, NetBeans, JDK 21, Python, Git, dan Arduino IDE.",
+      "apps": [
+        "vcredist",
+        "vscode",
+        "temurin-jdk21",
+        "netbeans",
+        "python-user",
+        "git",
+        "arduino-ide",
+        "7zip"
+      ]
+    },
+    {
+      "id": "semua",
+      "nama": "Lab Semua Aplikasi",
+      "deskripsi": "Instalasi seluruh software laboratorium yang tersedia.",
+      "apps": [
+        "vcredist",
+        "vscode",
+        "temurin-jdk21",
+        "netbeans",
+        "qgis",
+        "git",
+        "nodejs",
+        "python-user",
+        "7zip",
+        "winrar",
+        "laragon",
+        "xampp",
+        "php-standalone",
+        "composer",
+        "laravel-installer",
+        "arduino-ide",
+        "vs-community",
+        "android-studio",
+        "android-cmdline-tools",
+        "flutter-sdk"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+name: Lab Auto Installer CI
+
+on:
+  push:
+    branches: [ "main", "dev" ]
+  pull_request:
+    branches: [ "main", "dev" ]
+
+jobs:
+  quality-gate-windows:
+    name: Gerbang Kualitas Windows (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Kode
+        uses: actions/checkout@v4
+
+      - name: Pasang Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Pasang Dependensi
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock
+
+      - name: Gerbang 1 - Gaya & Linter (ruff)
+        run: |
+          ruff check system/app system/tests
+          ruff format --check system/app system/tests
+
+      - name: Gerbang 2 - Pengecekan Tipe Ketat (mypy --strict)
+        run: |
+          mypy --strict system/app/labinstaller
+
+      - name: Gerbang 3 - Verifikasi Sintaks (compileall)
+        run: |
+          python -m compileall -q system/app
+
+      - name: Gerbang 4 - Pengujian Unit (pytest)
+        run: |
+          pytest system/tests --cov=system/app/labinstaller --cov-report=term-missing
+
+      - name: Gerbang 5 - Verifikasi Batas Arsitektur (core tidak impor ui)
+        run: |
+          pytest system/tests/test_architecture.py
+
+      - name: Gerbang 6 - Validasi Konfigurasi & Skema (--check-config)
+        run: |
+          python system/boot/bootstrap.py --check-config
+
+      - name: Gerbang 7 - Uji Mandiri Peluncur (Start.bat --selftest)
+        shell: cmd
+        run: |
+          Start.bat --selftest
+
+      - name: Gerbang 8 - Simulasi Rencana (--dry-run seluruh profil)
+        shell: cmd
+        run: |
+          Start.bat --dry-run --profile web
+          Start.bat --dry-run --profile flutter
+          Start.bat --dry-run --profile gis
+          Start.bat --dry-run --profile dasar
+          Start.bat --dry-run --profile semua
+
+      - name: Gerbang 9 - Uji Render GUI (--selftest-gui)
+        shell: cmd
+        run: |
+          Start.bat --selftest-gui
+
+  quality-gate-linux:
+    name: Umpan Balik Cepat Core (ubuntu-latest)
+    runs-on: ubuntu-latest
+    env:
+      LABINSTALLER_ALLOW_NON_WINDOWS: "1"
+    steps:
+      - name: Checkout Kode
+        uses: actions/checkout@v4
+
+      - name: Pasang Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Pasang Dependensi
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov jsonschema ruff mypy types-jsonschema
+
+      - name: Linter & Format Check
+        run: |
+          ruff check system/app system/tests
+          ruff format --check system/app system/tests
+
+      - name: Mypy Strict
+        run: |
+          mypy --strict system/app/labinstaller
+
+      - name: Pytest Unit Tests
+        run: |
+          pytest system/tests
