@@ -19,6 +19,7 @@ from labinstaller.core.archive import extract_archive
 from labinstaller.core.config import ConfigManager, check_all_configs
 from labinstaller.core.detect import AppStatus, detect_app
 from labinstaller.core.installer import InstallResult, InstallStatus, WingetInstaller
+from labinstaller.core.laragon import run_laragon_post_install_hook
 from labinstaller.core.logger import log_info, log_warn
 from labinstaller.core.mirror import (
     HostingEntry,
@@ -242,9 +243,9 @@ def execute_installation_plan(
 
         current_app_id = item.app_id
 
-        def app_prog_wrapper(pct: int, msg: str, target_id: str = current_app_id) -> None:
+        def app_prog_wrapper(pct: int | float, msg: str, target_id: str = current_app_id) -> None:
             if on_app_progress:
-                on_app_progress(target_id, pct, msg)
+                on_app_progress(target_id, int(pct), msg)
 
         metode = str(meta.get("metode", "winget")).lower().strip()
 
@@ -387,6 +388,19 @@ def execute_installation_plan(
                 is_cancelled=is_cancelled,
             )
 
+        # Jalankan post-install hook jika ada (PRD Bagian 7 & 8)
+        if res.status == InstallStatus.BERHASIL:
+            hook_name = meta.get("hook")
+            if hook_name == "laragon":
+                app_prog_wrapper(95, "Menjalankan hook pasca-instalasi Laragon 6...")
+                hook_res = run_laragon_post_install_hook()
+                res = InstallResult(
+                    app_id=item.app_id,
+                    app_name=item.nama,
+                    status=hook_res.status,
+                    message=f"{res.message} | Hook: {hook_res.message}",
+                )
+
         results.append(res)
         if on_app_finish:
             on_app_finish(item.app_id, res)
@@ -474,6 +488,7 @@ def run_selftest() -> int:
         "labinstaller.core.downloader",
         "labinstaller.core.mirror",
         "labinstaller.core.native_installer",
+        "labinstaller.core.laragon",
         "labinstaller.core.preflight",
         "labinstaller.core.detect",
         "labinstaller.core.installer",

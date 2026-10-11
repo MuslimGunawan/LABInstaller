@@ -190,10 +190,54 @@ Dokumen ini berisi prosedur pengujian langkah-demi-langkah yang dapat dijalankan
 
 ---
 
-## 6. Skenario Pengujian Lanjutan (Milestone Selanjutnya)
-- **M4 & M5:** Uji koeksistensi Laragon (port 80/3306) dan XAMPP (port 8080/3307) dengan halaman verifikasi `lab-check.php`.
-- **M6:** Pengujian PHP 8.5.11 NTS di `C:\php`, aktivasi ekstensi `php.ini`, dan eksekusi Composer sebagai akun mahasiswa standar.
+## 6. Skenario Pengujian Milestone 4 (M4: Laragon 6, Custom Bin, Backup, & Rollback)
+
+### Skenario M4-1: Penghentian Selektif Proses Berjalan (Anti-Bentrok XAMPP)
+1. **Langkah:** Jalankan proses dari `C:\laragon` (misal `laragon.exe`, `httpd.exe`, `mysqld.exe`) dan jalankan pula proses serupa dari direktori lain seperti `C:\xampp`.
+2. **Langkah:** Jalankan hook pasca-instalasi Laragon atau instalasi Laragon via Lab Auto Installer.
+3. **Hasil yang Diharapkan:**
+   - Program memeriksa path eksekusi biner dari tiap proses yang berjalan.
+   - Hanya proses yang berada di bawah `C:\laragon` yang dihentikan secara tertib.
+   - Proses dari direktori lain (seperti Apache/MySQL milik XAMPP di `C:\xampp`) tetap berjalan tanpa terganggu (PRD 7.1 #2).
+
+### Skenario M4-2: Validasi Integritas Payload Custom Bin & Penolakan Payload Rusak
+1. **Langkah:** Letakkan payload custom bin di `system/data/payload/laragon-custom-bin/` namun kosongkan isinya (tanpa subfolder `bin/php` atau biner yang valid).
+2. **Langkah:** Jalankan instalasi Laragon dengan opsi payload tersebut.
+3. **Hasil yang Diharapkan:**
+   - Program memvalidasi struktur dan hash SHA-256 payload sebelum memodifikasi folder `C:\laragon\bin`.
+   - Program mendeteksi payload tidak valid, mencatat peringatan di log, membatalkan penimpaan, dan membiarkan instalasi Laragon standar tetap utuh apa adanya (PRD 7.1 #3).
+   - Exit code dan status instalasi tetap berhasil dengan pesan catatan yang transparan.
+
+### Skenario M4-3: Pencadangan (Backup) Otomatis dan Rollback saat Kegagalan
+1. **Langkah:** Siapkan Laragon dengan folder `C:\laragon\bin` yang sudah ada file asli.
+2. **Langkah:** Simulasikan kegagalan penimpaan (misal izin tulis disk ditolak di tengah proses transfer biner).
+3. **Hasil yang Diharapkan:**
+   - Program telah mencadangkan folder `bin` dan `data` ke `system/data/backup/laragon-bin-<timestamp>/` dan `system/data/backup/laragon-data-<timestamp>/`.
+   - Kegagalan di tengah penimpaan langsung memicu mekanisme rollback otomatis (`rollback_laragon_bin`).
+   - Seluruh berkas lama di `C:\laragon\bin` dipulihkan kembali 100% dari direktori cadangan.
+   - Laragon tidak berada dalam kondisi rusak atau setengah-setengah (atomik secara logis per PRD 7.2).
+
+### Skenario M4-4: Penyesuaian Konfigurasi Otomatis (laragon.ini & php.ini)
+1. **Langkah:** Terapkan custom bin PHP baru (misal `php-8.5.11`) ke Laragon.
+2. **Hasil yang Diharapkan:**
+   - File `C:\laragon\usr\laragon.ini` otomatis diperbarui untuk menunjuk versi PHP aktif yang baru (`PHP=php-8.5.11`).
+   - File `php.ini` pada build PHP baru dibuat secara aman dari `php.ini-development`, mengatur `extension_dir = "ext"`, dan mengaktifkan ekstensi penting (`mysqli`, `pdo_mysql`, `curl`, `mbstring`, `openssl`, `fileinfo`, `gd`).
+   - Eksekusi ulang bersifat idempoten (tidak menggandakan baris konfigurasi).
+
+### Skenario M4-5: Pemasangan Halaman Penanda lab-check.php & Verifikasi Biner
+1. **Langkah:** Selesaikan instalasi Laragon 6.
+2. **Hasil yang Diharapkan:**
+   - Berkas `C:\laragon\www\lab-check.php` terpasang (tanpa menimpa `index.php` pengguna).
+   - Halaman penanda berisi `STACK=LARAGON`, pembacaan versi PHP, port Apache (80), dan pengujian koneksi ke MySQL port 3306.
+   - Program menjalankan verifikasi biner otomatis (`php -v`, `httpd -t` untuk sintaks Apache, dan `mysqld --version`) dan mencatat status ke log.
+
+---
+
+## 7. Skenario Pengujian Lanjutan (Milestone Selanjutnya)
+- **M5:** XAMPP Stack: port adjustment (8080/8443/3307), anti-bentrok, verifikasi tombol Web/Admin, firewall rule.
+- **M6:** PHP 8.5.11 Standalone (`C:\php`), aktivasi ekstensi `php.ini` bersih, CA bundle SSL, dan Composer.
 - **M6b:** Kebijakan versi + uninstall bersih + backup data pengguna (`htdocs`/MySQL).
-- **M6c:** Verifikasi `flutter doctor -v` dan build Android / Windows desktop.
+- **M6c:** Paket Flutter Lab (`flutter doctor -v` hijau, lisensi Android diterima, Windows dev mode).
 - **M7:** Menu Verifikasi mandiri (V) dan ekspor laporan CSV/TXT.
+
 
