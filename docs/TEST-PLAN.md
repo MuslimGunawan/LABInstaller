@@ -291,11 +291,68 @@ Dokumen ini berisi prosedur pengujian langkah-demi-langkah yang dapat dijalankan
 
 ---
 
-## 8. Skenario Pengujian Lanjutan (Milestone Selanjutnya)
-- **M6:** PHP 8.5.11 Standalone (`C:\php`), aktivasi ekstensi `php.ini` bersih, CA bundle SSL, dan Composer.
+## 8. Skenario Pengujian Milestone 6 (M6: PHP Standalone, php.ini, CA Bundle, Composer, & Laravel)
+
+### Skenario M6-1: Pemasangan PHP 8.5.11 NTS di C:\php & Penempatan Terdepan pada PATH
+1. **Langkah:** Jalankan penginstalan paket profil Web atau pilih `php-standalone` via GUI / CLI.
+2. **Hasil yang Diharapkan:**
+   - Berkas biner PHP diekstrak dan disalin secara bersih ke `C:\php`.
+   - `C:\php` ditambahkan ke posisi paling depan pada variabel lingkungan `PATH` sistem (`core/env.py`).
+   - Penyiaran `WM_SETTINGCHANGE` berhasil dikirim sehingga jendela konsol command prompt baru langsung mengenali `php` dari `C:\php` tanpa perlu me-restart komputer.
+   - Perintah `where php` menampilkan `C:\php\php.exe` di baris pertama (sebelum Laragon atau XAMPP).
+
+### Skenario M6-2: Konfigurasi php.ini Otomatis & CA Bundle SSL
+1. **Langkah:** Periksa berkas `C:\php\php.ini` dan direktori `C:\php\extras\ssl\cacert.pem`.
+2. **Hasil yang Diharapkan:**
+   - `C:\php\php.ini` terbuat dari `php.ini-development` dengan nilai dasar:
+     * `extension_dir = "C:\php\ext"` (path absolut, bukan relatif).
+     * `date.timezone = "Asia/Jakarta"`.
+     * `memory_limit = 512M`.
+     * `upload_max_filesize = 64M` dan `post_max_size = 64M`.
+   - Berkas `C:\php\extras\ssl\cacert.pem` tersedia dan tervalidasi.
+   - Konfigurasi `curl.cainfo` dan `openssl.cafile` di `php.ini` menunjuk langsung ke berkas `cacert.pem` tersebut.
+
+### Skenario M6-3: Verifikasi Bebas Peringatan Startup (php -v & php -m)
+1. **Langkah:** Buka konsol baru dan jalankan:
+   ```cmd
+   php -v
+   php -m
+   php --ini
+   ```
+2. **Hasil yang Diharapkan:**
+   - Tidak ada satu pun baris peringatan atau error di stderr (seperti `PHP Startup: Unable to load dynamic library`).
+   - `php --ini` menunjukkan `Loaded Configuration File: C:\php\php.ini`.
+   - Seluruh ekstensi penting (`curl`, `fileinfo`, `gd`, `intl`, `mbstring`, `mysqli`, `openssl`, `pdo_mysql`, `zip`, dll.) muncul di daftar `php -m`.
+
+### Skenario M6-4: Wrapper Composer & Izin Multi-Pengguna (icacls Users:(M))
+1. **Langkah:** Periksa direktori `C:\composer` setelah instalasi Composer.
+2. **Hasil yang Diharapkan:**
+   - Berkas `C:\composer\composer.bat` terbuat dan memanggil `"C:\php\php.exe" "C:\composer\composer.phar" %*` secara eksplisit.
+   - Variabel lingkungan sistem terdaftar:
+     * `COMPOSER_HOME = C:\composer\home`
+     * `COMPOSER_CACHE_DIR = C:\composer\cache`
+     * PATH mencakup `C:\composer` dan `C:\composer\home\vendor\bin`.
+   - Hak akses NTFS (icacls) untuk grup `Users` terkonfigurasi dengan hak Modify `(M)` pada `C:\composer\home` dan `C:\composer\cache`.
+
+### Skenario M6-5: Eksekusi Composer & Laravel Installer sebagai Akun Standar
+1. **Langkah:** Masuk ke Windows sebagai akun mahasiswa biasa (Standard User / non-admin).
+2. **Langkah:** Buka Command Prompt dan jalankan:
+   ```cmd
+   composer -V
+   laravel --version
+   ```
+3. **Hasil yang Diharapkan:**
+   - `composer -V` menampilkan versi Composer dan PHP 8.5.x tanpa error permission denied.
+   - Perintah `laravel --version` berhasil dieksekusi dari PATH `C:\composer\home\vendor\bin`.
+   - Mahasiswa dapat menjalankan `composer create-project` atau `laravel new` di folder kerja mereka tanpa perlu hak administrator.
+
+---
+
+## 9. Skenario Pengujian Lanjutan (Milestone Selanjutnya)
 - **M6b:** Kebijakan versi + uninstall bersih + backup data pengguna (`htdocs`/MySQL).
 - **M6c:** Paket Flutter Lab (`flutter doctor -v` hijau, lisensi Android diterima, Windows dev mode).
 - **M7:** Menu Verifikasi mandiri (V) dan ekspor laporan CSV/TXT.
+
 
 
 

@@ -16,6 +16,10 @@ from pathlib import Path
 from typing import Any
 
 from labinstaller.core.archive import extract_archive
+from labinstaller.core.composer import (
+    run_composer_post_install_hook,
+    run_laravel_post_install_hook,
+)
 from labinstaller.core.config import ConfigManager, check_all_configs
 from labinstaller.core.detect import AppStatus, detect_app
 from labinstaller.core.installer import InstallResult, InstallStatus, WingetInstaller
@@ -36,6 +40,7 @@ from labinstaller.core.paths import (
     START_BAT,
     TOOLS_7Z_EXE,
 )
+from labinstaller.core.php_standalone import run_php_post_install_hook
 from labinstaller.core.preflight import run_preflight_checks
 from labinstaller.core.xampp import run_xampp_post_install_hook
 
@@ -358,6 +363,25 @@ def execute_installation_plan(
                     expected_files=meta.get("isiDiharapkan"),
                     on_progress=app_prog_wrapper,
                 )
+                # Tangani lanjutan arsip tipe salin (PRD 6F.1 #5)
+                arsip_dict = meta.get("arsip")
+                lanjutan = (
+                    arsip_dict.get("lanjutan")
+                    if isinstance(arsip_dict, dict)
+                    else meta.get("lanjutan")
+                )
+                if (
+                    isinstance(lanjutan, dict)
+                    and lanjutan.get("tipe") == "salin"
+                    and lanjutan.get("tujuan")
+                ):
+                    dest_path = Path(str(lanjutan["tujuan"]))
+                    dest_path.mkdir(parents=True, exist_ok=True)
+                    app_prog_wrapper(90, f"Menyalin berkas arsip ke {dest_path}...")
+                    import shutil
+
+                    shutil.copytree(staging_dir, dest_path, dirs_exist_ok=True)
+
                 det = detect_app(meta)
                 if det.status == AppStatus.SUDAH_TERPASANG:
                     res = InstallResult(
@@ -381,6 +405,14 @@ def execute_installation_plan(
                     message=f"Ekstraksi arsip gagal: {exc}",
                 )
 
+        elif metode == "hook-only":
+            res = InstallResult(
+                app_id=item.app_id,
+                app_name=item.nama,
+                status=InstallStatus.BERHASIL,
+                message="Menjalankan penyiapan berbasis hook...",
+            )
+
         else:
             # Standar: Winget
             res = installer.install(
@@ -389,7 +421,7 @@ def execute_installation_plan(
                 is_cancelled=is_cancelled,
             )
 
-        # Jalankan post-install hook jika ada (PRD Bagian 7 & 8)
+        # Jalankan post-install hook jika ada (PRD Bagian 6G, 7 & 8)
         if res.status == InstallStatus.BERHASIL:
             hook_name = meta.get("hook")
             if hook_name == "laragon":
@@ -404,6 +436,36 @@ def execute_installation_plan(
             elif hook_name == "xampp":
                 app_prog_wrapper(95, "Menjalankan hook pasca-instalasi XAMPP Stack...")
                 hook_res = run_xampp_post_install_hook()
+                res = InstallResult(
+                    app_id=item.app_id,
+                    app_name=item.nama,
+                    status=hook_res.status,
+                    message=f"{res.message} | Hook: {hook_res.message}",
+                )
+            elif hook_name == "php":
+                app_prog_wrapper(95, "Menjalankan hook pasca-instalasi PHP Standalone...")
+                hook_res = run_php_post_install_hook()
+                res = InstallResult(
+                    app_id=item.app_id,
+                    app_name=item.nama,
+                    status=hook_res.status,
+                    message=f"{res.message} | Hook: {hook_res.message}",
+                )
+            elif hook_name == "composer":
+                app_prog_wrapper(95, "Menjalankan hook pasca-instalasi Composer...")
+                phar_cand = CACHE_DOWNLOAD_DIR / "composer.phar"
+                hook_res = run_composer_post_install_hook(
+                    phar_source=phar_cand if phar_cand.is_file() else None
+                )
+                res = InstallResult(
+                    app_id=item.app_id,
+                    app_name=item.nama,
+                    status=hook_res.status,
+                    message=f"{res.message} | Hook: {hook_res.message}",
+                )
+            elif hook_name == "composer_laravel":
+                app_prog_wrapper(95, "Memasang Laravel CLI Installer...")
+                hook_res = run_laravel_post_install_hook()
                 res = InstallResult(
                     app_id=item.app_id,
                     app_name=item.nama,
@@ -502,6 +564,9 @@ def run_selftest() -> int:
         "labinstaller.core.hosts",
         "labinstaller.core.firewall",
         "labinstaller.core.xampp",
+        "labinstaller.core.env",
+        "labinstaller.core.php_standalone",
+        "labinstaller.core.composer",
         "labinstaller.core.preflight",
         "labinstaller.core.detect",
         "labinstaller.core.installer",
