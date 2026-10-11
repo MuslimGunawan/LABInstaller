@@ -233,11 +233,69 @@ Dokumen ini berisi prosedur pengujian langkah-demi-langkah yang dapat dijalankan
 
 ---
 
-## 7. Skenario Pengujian Lanjutan (Milestone Selanjutnya)
-- **M5:** XAMPP Stack: port adjustment (8080/8443/3307), anti-bentrok, verifikasi tombol Web/Admin, firewall rule.
+## 7. Skenario Pengujian Milestone 5 (M5: XAMPP, Penyesuaian Port Anti-Bentrok, Firewall, & Hosts)
+
+### Skenario M5-1: Penyesuaian Port Otomatis & Pembuatan Salinan Cadangan (.bak)
+1. **Langkah:** Jalankan penginstalan atau penyesuaian XAMPP di `C:\xampp`.
+2. **Hasil yang Diharapkan:**
+   - Program membuat salinan cadangan `.bak` sebelum mengubah konfigurasi:
+     * `C:\xampp\apache\conf\httpd.conf.bak`
+     * `C:\xampp\apache\conf\extra\httpd-ssl.conf.bak`
+     * `C:\xampp\mysql\bin\my.ini.bak`
+     * `C:\xampp\phpMyAdmin\config.inc.php.bak`
+     * `C:\xampp\xampp-control.ini.bak`
+   - Berkas `httpd.conf` mendengarkan pada `Listen 8080` dan `ServerName localhost:8080`.
+   - Berkas `httpd-ssl.conf` mendengarkan pada `Listen 8443` dan `<VirtualHost _default_:8443>`.
+   - Berkas `my.ini` memiliki `port=3307` pada blok `[client]` dan `[mysqld]`.
+
+### Skenario M5-2: Penyesuaian phpMyAdmin & Tombol Admin XAMPP Control Panel
+1. **Langkah:** Buka berkas `C:\xampp\phpMyAdmin\config.inc.php` dan `C:\xampp\xampp-control.ini` setelah proses penyesuaian.
+2. **Hasil yang Diharapkan:**
+   - `config.inc.php` memuat baris `$cfg['Servers'][$i]['port'] = '3307';` dan mengarah ke host `'127.0.0.1'` secara deterministik.
+   - `xampp-control.ini` mencatat port `Apache=8080`, `ApacheSSL=8443`, dan `MySQL=3307`.
+   - Mengklik tombol **Admin** pada modul Apache di XAMPP Control Panel membuka `http://localhost:8080/` (bukan port 80).
+   - Mengklik tombol **Admin** pada modul MySQL membuka `http://localhost:8080/phpmyadmin` dan berhasil login ke database port 3307 tanpa error koneksi.
+
+### Skenario M5-3: Pemasangan Halaman Penanda lab-check.php di htdocs
+1. **Langkah:** Buka browser dan akses alamat `http://localhost:8080/lab-check.php`.
+2. **Hasil yang Diharapkan:**
+   - Halaman menampilkan respons plain text yang diawali dengan `STACK=XAMPP`.
+   - `SERVER_PORT=8080` dan `DB_PORT=3307`.
+   - `DB_STATUS=OK` (berhasil mengeksekusi `SELECT 1` ke MySQL port 3307).
+   - Akses dari luar (bukan 127.0.0.1 / ::1) otomatis ditolak dengan kode status HTTP 403 Forbidden demi keamanan lab.
+
+### Skenario M5-4: Otomasi Aturan Windows Firewall (Inbound Allow)
+1. **Langkah:** Buka Windows Defender Firewall with Advanced Security (`wf.msc`) -> Inbound Rules.
+2. **Hasil yang Diharapkan:**
+   - Terdapat aturan inbound yang dibuat otomatis oleh Lab Auto Installer:
+     * `LabInstaller - XAMPP Apache (...)` mengarah ke `C:\xampp\apache\bin\httpd.exe`.
+     * `LabInstaller - XAMPP MySQL (...)` mengarah ke `C:\xampp\mysql\bin\mysqld.exe`.
+   - Saat mahasiswa menjalankan Apache atau MySQL melalui XAMPP Control Panel, tidak muncul jendela popup konfirmasi firewall Windows.
+
+### Skenario M5-5: Pengeditan Berkas hosts Aman & Idempoten (core/hosts.py)
+1. **Langkah:** Panggil penambahan entri domain virtual host (misal `127.0.0.1 myapp.test`).
+2. **Hasil yang Diharapkan:**
+   - Berkas `C:\Windows\System32\drivers\etc\hosts` memiliki cadangan `hosts.bak`.
+   - Entri baru ditambahkan dengan komentar penanda: `127.0.0.1 myapp.test # LabInstaller`.
+   - Pemanggilan berulang dengan data yang sama tidak menghasilkan baris duplikat (idempoten).
+   - Fungsi penghapusan (`remove_hosts_entry`) hanya menghapus baris yang memiliki tag `# LabInstaller` dan membiarkan konfigurasi sistem lainnya utuh.
+
+### Skenario M5-6: Uji Koeksistensi Bersamaan (Laragon Port 80 vs XAMPP Port 8080)
+1. **Langkah:** Jalankan Apache dan MySQL pada Laragon (Start All di Laragon).
+2. **Langkah:** Jalankan Apache dan MySQL pada XAMPP (Start Apache & MySQL di XAMPP Control Panel).
+3. **Hasil yang Diharapkan:**
+   - Keempat layanan (Apache Laragon, MySQL Laragon, Apache XAMPP, MySQL XAMPP) menyala hijau bersamaan tanpa bentrok port.
+   - Mengakses `http://localhost` membuka halaman Laragon port 80.
+   - Mengakses `http://localhost:8080` membuka halaman dashboard XAMPP port 8080.
+   - Menghentikan atau merestart salah satu tumpukan tidak mengganggu tumpukan lainnya.
+
+---
+
+## 8. Skenario Pengujian Lanjutan (Milestone Selanjutnya)
 - **M6:** PHP 8.5.11 Standalone (`C:\php`), aktivasi ekstensi `php.ini` bersih, CA bundle SSL, dan Composer.
 - **M6b:** Kebijakan versi + uninstall bersih + backup data pengguna (`htdocs`/MySQL).
 - **M6c:** Paket Flutter Lab (`flutter doctor -v` hijau, lisensi Android diterima, Windows dev mode).
 - **M7:** Menu Verifikasi mandiri (V) dan ekspor laporan CSV/TXT.
+
 
 

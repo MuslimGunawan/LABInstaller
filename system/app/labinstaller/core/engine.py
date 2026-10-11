@@ -37,6 +37,7 @@ from labinstaller.core.paths import (
     TOOLS_7Z_EXE,
 )
 from labinstaller.core.preflight import run_preflight_checks
+from labinstaller.core.xampp import run_xampp_post_install_hook
 
 
 @dataclass
@@ -400,6 +401,15 @@ def execute_installation_plan(
                     status=hook_res.status,
                     message=f"{res.message} | Hook: {hook_res.message}",
                 )
+            elif hook_name == "xampp":
+                app_prog_wrapper(95, "Menjalankan hook pasca-instalasi XAMPP Stack...")
+                hook_res = run_xampp_post_install_hook()
+                res = InstallResult(
+                    app_id=item.app_id,
+                    app_name=item.nama,
+                    status=hook_res.status,
+                    message=f"{res.message} | Hook: {hook_res.message}",
+                )
 
         results.append(res)
         if on_app_finish:
@@ -489,6 +499,9 @@ def run_selftest() -> int:
         "labinstaller.core.mirror",
         "labinstaller.core.native_installer",
         "labinstaller.core.laragon",
+        "labinstaller.core.hosts",
+        "labinstaller.core.firewall",
+        "labinstaller.core.xampp",
         "labinstaller.core.preflight",
         "labinstaller.core.detect",
         "labinstaller.core.installer",
