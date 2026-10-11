@@ -12,15 +12,22 @@ import platform
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
+from labinstaller.core.archive import extract_archive
 from labinstaller.core.config import ConfigManager, check_all_configs
 from labinstaller.core.detect import AppStatus, detect_app
 from labinstaller.core.installer import InstallResult, InstallStatus, WingetInstaller
 from labinstaller.core.logger import log_info, log_warn
+from labinstaller.core.native_installer import NativeInstaller
 from labinstaller.core.paths import (
+    CACHE_DOWNLOAD_DIR,
+    CACHE_EXTRACT_DIR,
+    PAYLOAD_DIR,
     ROOT_DIR,
     START_BAT,
+    TOOLS_7Z_EXE,
 )
 from labinstaller.core.preflight import run_preflight_checks
 
@@ -167,6 +174,7 @@ def execute_installation_plan(
     plan: PlanResult,
     config_manager: ConfigManager,
     installer: WingetInstaller | None = None,
+    native_installer: NativeInstaller | None = None,
     on_app_start: Callable[[str, int, int], None] | None = None,
     on_app_progress: Callable[[str, int, str], None] | None = None,
     on_app_finish: Callable[[str, InstallResult], None] | None = None,
@@ -175,6 +183,8 @@ def execute_installation_plan(
     """Mengeksekusi rencana instalasi berurutan dengan penanganan pembatalan dan verifikasi."""
     if installer is None:
         installer = WingetInstaller()
+    if native_installer is None:
+        native_installer = NativeInstaller()
 
     all_apps = config_manager.apps
     apps_by_id = {app["id"]: app for app in all_apps}
@@ -224,11 +234,101 @@ def execute_installation_plan(
             if on_app_progress:
                 on_app_progress(target_id, pct, msg)
 
-        res = installer.install(
-            meta,
-            on_progress=app_prog_wrapper,
-            is_cancelled=is_cancelled,
-        )
+        metode = str(meta.get("metode", "winget")).lower().strip()
+
+        if metode in ("exe", "msi"):
+            # Cari berkas biner di CACHE_DOWNLOAD_DIR atau PAYLOAD_DIR
+            local_filename = str(meta.get("berkasLokal", "")).strip()
+            if not local_filename and meta.get("url"):
+                local_filename = str(meta["url"]).split("?")[0].rstrip("/").split("/")[-1]
+
+            bin_path: Path | None = None
+            if local_filename:
+                cand1 = CACHE_DOWNLOAD_DIR / local_filename
+                cand2 = PAYLOAD_DIR / local_filename
+                if cand1.is_file():
+                    bin_path = cand1
+                elif cand2.is_file():
+                    bin_path = cand2
+
+            if not bin_path:
+                res = InstallResult(
+                    app_id=item.app_id,
+                    app_name=item.nama,
+                    status=InstallStatus.GAGAL,
+                    message=f"Berkas installer ({local_filename or item.nama}) belum tersedia di cache/payload.",
+                )
+            else:
+                res = native_installer.install_file(
+                    bin_path,
+                    meta,
+                    on_progress=app_prog_wrapper,
+                    is_cancelled=is_cancelled,
+                )
+
+        elif metode == "arsip":
+            local_filename = str(meta.get("berkasLokal", "")).strip()
+            if not local_filename and meta.get("url"):
+                local_filename = str(meta["url"]).split("?")[0].rstrip("/").split("/")[-1]
+
+            archive_path: Path | None = None
+            if local_filename:
+                cand1 = CACHE_DOWNLOAD_DIR / local_filename
+                cand2 = PAYLOAD_DIR / local_filename
+                if cand1.is_file():
+                    archive_path = cand1
+                elif cand2.is_file():
+                    archive_path = cand2
+
+            if not archive_path:
+                res = InstallResult(
+                    app_id=item.app_id,
+                    app_name=item.nama,
+                    status=InstallStatus.GAGAL,
+                    message=f"Berkas arsip ({local_filename or item.nama}) belum tersedia di cache/payload.",
+                )
+            else:
+                try:
+                    staging_dir = CACHE_EXTRACT_DIR / item.app_id
+                    extract_archive(
+                        archive_path=archive_path,
+                        staging_dir=staging_dir,
+                        archive_format=str(meta.get("formatArsip", "zip")),
+                        expected_sha256=meta.get("sha256"),
+                        expected_files=meta.get("isiDiharapkan"),
+                        on_progress=app_prog_wrapper,
+                    )
+                    det = detect_app(meta)
+                    if det.status == AppStatus.SUDAH_TERPASANG:
+                        res = InstallResult(
+                            app_id=item.app_id,
+                            app_name=item.nama,
+                            status=InstallStatus.BERHASIL,
+                            message=f"Ekstraksi dan verifikasi berhasil ({det.installed_version or 'OK'}).",
+                        )
+                    else:
+                        res = InstallResult(
+                            app_id=item.app_id,
+                            app_name=item.nama,
+                            status=InstallStatus.BERHASIL,
+                            message=f"Ekstraksi selesai ke {staging_dir.name}.",
+                        )
+                except Exception as exc:
+                    res = InstallResult(
+                        app_id=item.app_id,
+                        app_name=item.nama,
+                        status=InstallStatus.GAGAL,
+                        message=f"Ekstraksi arsip gagal: {exc}",
+                    )
+
+        else:
+            # Standar: Winget
+            res = installer.install(
+                meta,
+                on_progress=app_prog_wrapper,
+                is_cancelled=is_cancelled,
+            )
+
         results.append(res)
         if on_app_finish:
             on_app_finish(item.app_id, res)
@@ -307,6 +407,10 @@ def run_selftest() -> int:
         "labinstaller.core.paths",
         "labinstaller.core.logger",
         "labinstaller.core.config",
+        "labinstaller.core.hasher",
+        "labinstaller.core.archive",
+        "labinstaller.core.downloader",
+        "labinstaller.core.native_installer",
         "labinstaller.core.preflight",
         "labinstaller.core.detect",
         "labinstaller.core.installer",
@@ -356,6 +460,14 @@ def run_selftest() -> int:
         # Pada lingkungan headless CI Linux, berikan toleransi bila di-skip
         if platform.system() == "Windows":
             selftest_ok = False
+
+    # 5b. Pemeriksaan Utilitas 7-Zip Portabel
+    if TOOLS_7Z_EXE.exists():
+        print(f"  [OK] 7-Zip internal tersedia: {TOOLS_7Z_EXE.name}")
+    else:
+        print(
+            f"  [INFO] 7-Zip internal tidak ditemukan di {TOOLS_7Z_EXE.name}. Fallback zipfile/PATH."
+        )
 
     # 6. Pre-flight Sistem Ringan
     print("[6/6] Memeriksa kelayakan preflight sistem...")

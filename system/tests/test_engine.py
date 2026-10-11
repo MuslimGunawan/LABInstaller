@@ -47,3 +47,61 @@ def test_run_selftest_execution() -> None:
     """Memastikan run_selftest memverifikasi seluruh komponen dan mengembalikan exit code 0."""
     code = run_selftest()
     assert code == 0
+
+
+def test_execute_installation_plan_native_and_archive() -> None:
+    """Memastikan execute_installation_plan dapat menangani metode exe, msi, arsip."""
+    from labinstaller.core.engine import AppPlanItem, PlanResult, execute_installation_plan
+    from labinstaller.core.installer import InstallResult, InstallStatus
+    from labinstaller.core.native_installer import NativeInstaller
+
+    cm = ConfigManager()
+    cm._apps_data = {
+        "apps": [
+            {"id": "app_exe", "nama": "App Exe", "metode": "exe", "berkasLokal": "app.exe"},
+            {"id": "app_arsip", "nama": "App Arsip", "metode": "arsip", "berkasLokal": "app.zip"},
+        ]
+    }
+
+    plan = PlanResult(
+        items=[
+            AppPlanItem(
+                app_id="app_exe",
+                nama="App Exe",
+                kategori="Utilitas",
+                versi_target="1.0",
+                versi_terpasang=None,
+                status="BELUM_TERPASANG",
+                metode="exe",
+                ukuran_bytes=1000,
+            ),
+            AppPlanItem(
+                app_id="app_arsip",
+                nama="App Arsip",
+                kategori="Utilitas",
+                versi_target="1.0",
+                versi_terpasang=None,
+                status="BELUM_TERPASANG",
+                metode="arsip",
+                ukuran_bytes=2000,
+            ),
+        ],
+        total_download_bytes=3000,
+        estimasi_menit=0.1,
+    )
+
+    class MockNativeInstaller(NativeInstaller):
+        def install_file(self, *args, **kwargs) -> InstallResult:  # type: ignore[no-untyped-def]
+            return InstallResult(
+                app_id="app_exe",
+                app_name="App Exe",
+                status=InstallStatus.BERHASIL,
+                message="Instalasi mock sukses",
+            )
+
+    # Ketika berkas tidak ada di cache
+    results = execute_installation_plan(plan, cm)
+    assert len(results) == 2
+    # Karena berkas belum ada di cache/payload, status harus GAGAL dengan pesan jelas
+    assert results[0].status == InstallStatus.GAGAL
+    assert results[1].status == InstallStatus.GAGAL

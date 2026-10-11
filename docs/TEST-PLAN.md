@@ -107,8 +107,49 @@ Dokumen ini berisi prosedur pengujian langkah-demi-langkah yang dapat dijalankan
 
 ---
 
-## 4. Skenario Pengujian Lanjutan (Milestone Selanjutnya)
-- **M3:** Ekstraksi arsip ZIP, 7Z, dan RAR di PC tanpa software archiver terpasang.
+## 4. Skenario Pengujian Milestone 3 (M3: Ekstraksi Mandiri & Installer Non-Winget)
+
+### Skenario M3-1: Ekstraksi Mandiri Tanpa Software Archiver di Host
+1. **Prasyarat:** Komputer Windows bersih tanpa 7-Zip atau WinRAR terpasang (misal Windows Sandbox).
+2. **Langkah:** Tempatkan berkas arsip `.zip`, `.7z`, atau `.rar` di direktori staging/payload.
+3. **Hasil yang Diharapkan:**
+   - Untuk format `.zip`: Ekstraksi diproses menggunakan modul internal Python `zipfile` per entri dengan verifikasi keamanan.
+   - Untuk format `.7z` dan `.rar`: Ekstraksi otomatis menggunakan 7-Zip internal yang ter-bundle di `system\tools\7z\7z.exe` (+ `7z.dll`).
+   - Ekstraksi berhasil 100% tanpa meminta pengguna menginstal software unzipper eksternal.
+
+### Skenario M3-2: Pertahanan Terhadap Kerentanan Zip-Slip (Path Traversal)
+1. **Langkah:** Buat arsip pengujian dengan entri berbahaya (`../../Windows/System32/malicious.dll` atau path drive root absolut `C:\payload.exe`).
+2. **Hasil yang Diharapkan:**
+   - Modul `archive.py` (`is_safe_extraction_path`) mendeteksi percobaan path traversal.
+   - Operasi ekstraksi dibatalkan seketika dengan melempar `ZipSlipSecurityError`.
+   - Tidak ada berkas yang ditulis di luar direktori staging yang ditentukan.
+
+### Skenario M3-3: Idempotensi Ekstraksi (.extracted-ok) & Pembersihan Mark of the Web
+1. **Langkah:** Ekstrak arsip aplikasi portabel (misal PHP atau Flutter).
+2. **Hasil yang Diharapkan:**
+   - Berkas penanda `.extracted-ok` dibuat di direktori target berisi metadata JSON (SHA-256 arsip sumber, jumlah berkas, dan stempel waktu UTC).
+   - Seluruh NTFS stream `Zone.Identifier` (Mark of the Web) dibersihkan sehingga binary dapat dijalankan tanpa peringatan keamanan "This file came from another computer".
+3. **Langkah:** Jalankan kembali ekstraksi untuk arsip yang sama.
+4. **Hasil yang Diharapkan:** Program mendeteksi penanda `.extracted-ok` yang cocok dengan SHA-256 arsip dan langsung melewati (skip) ekstraksi ulang.
+
+### Skenario M3-4: Eksekusi Senyap Installer Non-Winget (.exe & .msi)
+1. **Langkah:** Jalankan instalasi berkas biner `.exe` (Inno Setup / NSIS) atau `.msi` (misal Temurin JDK / VC++ Redist).
+2. **Hasil yang Diharapkan:**
+   - Berkas `.msi` dieksekusi via `msiexec.exe /i "<path>" /qn /norestart`.
+   - Berkas `.exe` dieksekusi dengan argumen silent yang sesuai dari konfigurasi.
+   - Proses berjalan di latar belakang dengan flag `CREATE_NO_WINDOW` (tanpa pop-up jendela hitam).
+   - Exit code `0` dan `3010` (Reboot Required) diperlakukan sebagai status sukses terverifikasi.
+
+### Skenario M3-5: Pengunduh Tangguh & Pencegahan Respons HTML Kuota / Antivirus
+1. **Langkah:** Uji unduhan dari tautan Google Drive atau mirror yang menghasilkan halaman HTML konfirmasi/kuota kupon.
+2. **Hasil yang Diharapkan:**
+   - Modul `downloader.py` mendeteksi respons `Content-Type: text/html` atau tag `<!DOCTYPE html>`.
+   - Berkas sementara `.part` langsung dibersihkan dan unduhan ditolak dengan `DownloadHtmlResponseError` alih-alih menyimpan berkas HTML sebagai installer `.exe`.
+
+---
+
+## 5. Skenario Pengujian Lanjutan (Milestone Selanjutnya)
+- **M3b:** Download Manager mandiri multi-koneksi dengan mirror Google Drive cadangan.
 - **M4 & M5:** Uji koeksistensi Laragon (port 80/3306) dan XAMPP (port 8080/3307) dengan halaman verifikasi `lab-check.php`.
 - **M6:** Pengujian PHP 8.5.11 NTS di `C:\php`, aktivasi ekstensi `php.ini`, dan eksekusi Composer sebagai akun mahasiswa standar.
 - **M6c:** Verifikasi `flutter doctor -v` dan build Android / Windows desktop.
