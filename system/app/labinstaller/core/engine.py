@@ -20,6 +20,12 @@ from labinstaller.core.config import ConfigManager, check_all_configs
 from labinstaller.core.detect import AppStatus, detect_app
 from labinstaller.core.installer import InstallResult, InstallStatus, WingetInstaller
 from labinstaller.core.logger import log_info, log_warn
+from labinstaller.core.mirror import (
+    HostingEntry,
+    download_with_mirrors,
+    publish_file_to_share,
+    write_butuh_hosting_report,
+)
 from labinstaller.core.native_installer import NativeInstaller
 from labinstaller.core.paths import (
     CACHE_DOWNLOAD_DIR,
@@ -175,6 +181,7 @@ def execute_installation_plan(
     config_manager: ConfigManager,
     installer: WingetInstaller | None = None,
     native_installer: NativeInstaller | None = None,
+    publish_to_share: bool = False,
     on_app_start: Callable[[str, int, int], None] | None = None,
     on_app_progress: Callable[[str, int, str], None] | None = None,
     on_app_finish: Callable[[str, InstallResult], None] | None = None,
@@ -189,6 +196,11 @@ def execute_installation_plan(
     all_apps = config_manager.apps
     apps_by_id = {app["id"]: app for app in all_apps}
     results: list[InstallResult] = []
+    pending_hosting_entries: list[HostingEntry] = []
+
+    lan_share_path: Path | None = None
+    if config_manager.local.get("lokasiCacheBersama"):
+        lan_share_path = Path(str(config_manager.local["lokasiCacheBersama"]))
 
     total_items = len(plan.items)
     for idx, item in enumerate(plan.items, 1):
@@ -251,20 +263,43 @@ def execute_installation_plan(
                 elif cand2.is_file():
                     bin_path = cand2
 
+            # Jika berkas biner belum ada, unduh melalui mirror manager (PRD 6B)
             if not bin_path:
-                res = InstallResult(
-                    app_id=item.app_id,
-                    app_name=item.nama,
-                    status=InstallStatus.GAGAL,
-                    message=f"Berkas installer ({local_filename or item.nama}) belum tersedia di cache/payload.",
-                )
-            else:
-                res = native_installer.install_file(
-                    bin_path,
-                    meta,
-                    on_progress=app_prog_wrapper,
+                target_dest = CACHE_DOWNLOAD_DIR / (local_filename or f"{item.app_id}.exe")
+                dl_res = download_with_mirrors(
+                    app_meta=meta,
+                    target_path=target_dest,
+                    mirrors_config={"files": config_manager.mirrors},
+                    lan_share_dir=lan_share_path,
+                    on_progress=lambda pct, spd, _d, _t: app_prog_wrapper(
+                        pct, f"Mengunduh ({spd:.1f} MB/s)..."
+                    ),
                     is_cancelled=is_cancelled,
                 )
+                if dl_res.success and dl_res.file_path:
+                    bin_path = dl_res.file_path
+                    if publish_to_share and lan_share_path:
+                        publish_file_to_share(dl_res.file_path, lan_share_path)
+                else:
+                    if dl_res.hosting_entry:
+                        pending_hosting_entries.append(dl_res.hosting_entry)
+                    res = InstallResult(
+                        app_id=item.app_id,
+                        app_name=item.nama,
+                        status=InstallStatus.GAGAL,
+                        message=dl_res.message,
+                    )
+                    results.append(res)
+                    if on_app_finish:
+                        on_app_finish(item.app_id, res)
+                    continue
+
+            res = native_installer.install_file(
+                bin_path,
+                meta,
+                on_progress=app_prog_wrapper,
+                is_cancelled=is_cancelled,
+            )
 
         elif metode == "arsip":
             local_filename = str(meta.get("berkasLokal", "")).strip()
@@ -280,46 +315,69 @@ def execute_installation_plan(
                 elif cand2.is_file():
                     archive_path = cand2
 
+            # Jika berkas arsip belum ada, unduh melalui mirror manager (PRD 6B)
             if not archive_path:
-                res = InstallResult(
-                    app_id=item.app_id,
-                    app_name=item.nama,
-                    status=InstallStatus.GAGAL,
-                    message=f"Berkas arsip ({local_filename or item.nama}) belum tersedia di cache/payload.",
+                target_dest = CACHE_DOWNLOAD_DIR / (local_filename or f"{item.app_id}.zip")
+                dl_res = download_with_mirrors(
+                    app_meta=meta,
+                    target_path=target_dest,
+                    mirrors_config={"files": config_manager.mirrors},
+                    lan_share_dir=lan_share_path,
+                    on_progress=lambda pct, spd, _d, _t: app_prog_wrapper(
+                        pct, f"Mengunduh ({spd:.1f} MB/s)..."
+                    ),
+                    is_cancelled=is_cancelled,
                 )
-            else:
-                try:
-                    staging_dir = CACHE_EXTRACT_DIR / item.app_id
-                    extract_archive(
-                        archive_path=archive_path,
-                        staging_dir=staging_dir,
-                        archive_format=str(meta.get("formatArsip", "zip")),
-                        expected_sha256=meta.get("sha256"),
-                        expected_files=meta.get("isiDiharapkan"),
-                        on_progress=app_prog_wrapper,
-                    )
-                    det = detect_app(meta)
-                    if det.status == AppStatus.SUDAH_TERPASANG:
-                        res = InstallResult(
-                            app_id=item.app_id,
-                            app_name=item.nama,
-                            status=InstallStatus.BERHASIL,
-                            message=f"Ekstraksi dan verifikasi berhasil ({det.installed_version or 'OK'}).",
-                        )
-                    else:
-                        res = InstallResult(
-                            app_id=item.app_id,
-                            app_name=item.nama,
-                            status=InstallStatus.BERHASIL,
-                            message=f"Ekstraksi selesai ke {staging_dir.name}.",
-                        )
-                except Exception as exc:
+                if dl_res.success and dl_res.file_path:
+                    archive_path = dl_res.file_path
+                    if publish_to_share and lan_share_path:
+                        publish_file_to_share(dl_res.file_path, lan_share_path)
+                else:
+                    if dl_res.hosting_entry:
+                        pending_hosting_entries.append(dl_res.hosting_entry)
                     res = InstallResult(
                         app_id=item.app_id,
                         app_name=item.nama,
                         status=InstallStatus.GAGAL,
-                        message=f"Ekstraksi arsip gagal: {exc}",
+                        message=dl_res.message,
                     )
+                    results.append(res)
+                    if on_app_finish:
+                        on_app_finish(item.app_id, res)
+                    continue
+
+            try:
+                staging_dir = CACHE_EXTRACT_DIR / item.app_id
+                extract_archive(
+                    archive_path=archive_path,
+                    staging_dir=staging_dir,
+                    archive_format=str(meta.get("formatArsip", "zip")),
+                    expected_sha256=meta.get("sha256"),
+                    expected_files=meta.get("isiDiharapkan"),
+                    on_progress=app_prog_wrapper,
+                )
+                det = detect_app(meta)
+                if det.status == AppStatus.SUDAH_TERPASANG:
+                    res = InstallResult(
+                        app_id=item.app_id,
+                        app_name=item.nama,
+                        status=InstallStatus.BERHASIL,
+                        message=f"Ekstraksi dan verifikasi berhasil ({det.installed_version or 'OK'}).",
+                    )
+                else:
+                    res = InstallResult(
+                        app_id=item.app_id,
+                        app_name=item.nama,
+                        status=InstallStatus.BERHASIL,
+                        message=f"Ekstraksi selesai ke {staging_dir.name}.",
+                    )
+            except Exception as exc:
+                res = InstallResult(
+                    app_id=item.app_id,
+                    app_name=item.nama,
+                    status=InstallStatus.GAGAL,
+                    message=f"Ekstraksi arsip gagal: {exc}",
+                )
 
         else:
             # Standar: Winget
@@ -332,6 +390,10 @@ def execute_installation_plan(
         results.append(res)
         if on_app_finish:
             on_app_finish(item.app_id, res)
+
+    # Tulis laporan butuh hosting jika ada kegagalan sumber yang membutuhkan mirror
+    if pending_hosting_entries:
+        write_butuh_hosting_report(pending_hosting_entries)
 
     return results
 
@@ -410,6 +472,7 @@ def run_selftest() -> int:
         "labinstaller.core.hasher",
         "labinstaller.core.archive",
         "labinstaller.core.downloader",
+        "labinstaller.core.mirror",
         "labinstaller.core.native_installer",
         "labinstaller.core.preflight",
         "labinstaller.core.detect",

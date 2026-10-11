@@ -148,10 +148,52 @@ Dokumen ini berisi prosedur pengujian langkah-demi-langkah yang dapat dijalankan
 
 ---
 
-## 5. Skenario Pengujian Lanjutan (Milestone Selanjutnya)
-- **M3b:** Download Manager mandiri multi-koneksi dengan mirror Google Drive cadangan.
+## 5. Skenario Pengujian Milestone 3b (M3b: Sumber Unduhan & Mirror Google Drive)
+
+### Skenario M3b-1: Failover Otomatis Antar Mirror Google Drive
+1. **Langkah:** Siapkan aplikasi dengan 4 mirror Google Drive di `config/mirrors.json`.
+2. **Langkah:** Simulasikan mirror 1, 2, dan 3 mati/kuota/timeout, sementara mirror 4 aktif dengan hash yang valid.
+3. **Hasil yang Diharapkan:**
+   - Program mencoba mirror 1-3 secara berurutan, mendeteksi kegagalan tanpa berhenti total.
+   - Program otomatis beralih (failover) ke mirror 4.
+   - Unduhan berhasil diselesaikan dari mirror 4, diverifikasi integritas SHA-256, dan siap dipasang.
+
+### Skenario M3b-2: Pengacakan Mirror Deterministik Per-PC
+1. **Langkah:** Jalankan program pada dua mesin berbeda (atau dengan seed PC yang berbeda di lab).
+2. **Hasil yang Diharapkan:**
+   - Urutan pengujian mirror Google Drive teracak antar PC lab sehingga beban unduhan dan kuota Google Drive tidak terkonsentrasi pada satu mirror yang sama.
+   - Urutan stabil pada PC yang sama sehingga percobaan ulang tidak memicu kekacauan rotasi.
+
+### Skenario M3b-3: Cooldown Otomatis Mirror Terkena Kuota
+1. **Langkah:** Akses mirror Google Drive yang mengembalikan respons kuota (HTTP 403/429 atau HTML "kuota terlampaui").
+2. **Hasil yang Diharapkan:**
+   - Mirror tersebut otomatis ditandai status cooldown (30-60 menit) dan dicatat di `system/data/state/state.json`.
+   - Pada unduhan aplikasi lain dalam sesi yang sama, mirror dalam masa cooldown otomatis dilewati (skip) agar tidak membuang waktu tunggu timeout.
+
+### Skenario M3b-4: Pelaporan Berkas "Butuh Hosting Manual" & Generator CSV/TXT
+1. **Langkah:** Jalankan instalasi aplikasi yang seluruh sumber resmi dan mirror Drive-nya sengaja diputus/tidak tersedia.
+2. **Hasil yang Diharapkan:**
+   - Program tidak mengalami crash / unhandled exception.
+   - Aplikasi ditandai "menunggu sumber" pada ringkasan, dan program tetap melanjutkan instalasi aplikasi lainnya (PRD 6B.4).
+   - Program otomatis menghasilkan berkas laporan di `system/data/logs/butuh-hosting-<timestamp>.txt` dan `.csv` berisi rincian nama aplikasi, versi, nama berkas, ukuran, hash SHA-256, dan kolom kosong untuk 4 File ID Google Drive.
+
+### Skenario M3b-5: Menu H (`Start.bat --hosting-list`) dan Fitur LAN Share (`--publish-to-share`)
+1. **Langkah:** Buka konsol dan jalankan perintah:
+   ```cmd
+   Start.bat --hosting-list
+   ```
+2. **Hasil yang Diharapkan:**
+   - Program mencetak tabel daftar seluruh aplikasi yang membutuhkan hosting manual Google Drive lengkap dengan nama berkas, ukuran, dan SHA-256 resmi.
+3. **Langkah:** Jalankan instalasi dengan opsi `--publish-to-share` pada PC pertama yang berhasil mengunduh berkas.
+4. **Hasil yang Diharapkan:**
+   - Berkas unduhan yang tervalidasi SHA-256 otomatis disalin ke folder bersama LAN (`lokasiCacheBersama` di `data/local.json`) secara atomik sehingga PC lab lainnya dapat mengambil dari LAN tanpa memakai kuota internet 20 Mbps.
+
+---
+
+## 6. Skenario Pengujian Lanjutan (Milestone Selanjutnya)
 - **M4 & M5:** Uji koeksistensi Laragon (port 80/3306) dan XAMPP (port 8080/3307) dengan halaman verifikasi `lab-check.php`.
 - **M6:** Pengujian PHP 8.5.11 NTS di `C:\php`, aktivasi ekstensi `php.ini`, dan eksekusi Composer sebagai akun mahasiswa standar.
+- **M6b:** Kebijakan versi + uninstall bersih + backup data pengguna (`htdocs`/MySQL).
 - **M6c:** Verifikasi `flutter doctor -v` dan build Android / Windows desktop.
 - **M7:** Menu Verifikasi mandiri (V) dan ekspor laporan CSV/TXT.
 

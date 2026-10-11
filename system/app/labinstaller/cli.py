@@ -96,6 +96,11 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Bersihkan berkas installer versi usang dari folder cache",
     )
+    parser.add_argument(
+        "--hosting-list",
+        action="store_true",
+        help="Tampilkan daftar berkas yang perlu di-hosting manual di Google Drive (Menu H)",
+    )
 
     return parser.parse_args(argv)
 
@@ -123,6 +128,39 @@ def run_cli_mode(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"[ERROR] Gagal memuat konfigurasi: {exc}")
         return 4
+
+    if args.hosting_list:
+        print("\n=== DAFTAR BERKAS BUTUH HOSTING MANUAL (GOOGLE DRIVE) ===")
+        pending = []
+        for app in config_manager.apps:
+            if app.get("statusSumber") == "menunggu-hosting":
+                pending.append(app)
+            else:
+                for s in app.get("sumber", []):
+                    if s.get("tipe") == "gdrive" and "ISI_FILE_ID" in str(s.get("fileId", "")):
+                        pending.append(app)
+                        break
+
+        if not pending:
+            print("Tidak ada berkas yang saat ini menunggu hosting manual di Google Drive.\n")
+            return 0
+
+        print(
+            f"Ditemukan {len(pending)} aplikasi yang membutuhkan hosting manual di Google Drive:\n"
+        )
+        for idx, p in enumerate(pending, 1):
+            fn = p.get("berkasLokal") or p.get("id")
+            print(f"[{idx}] Aplikasi      : {p.get('nama')} (v{p.get('versiTarget')})")
+            print(f"    Nama Berkas   : {fn}")
+            print(
+                f"    Ukuran Resmi  : {p.get('ukuran', 0)} bytes ({int(p.get('ukuran', 0)) / (1024 * 1024):.2f} MB)"
+            )
+            print(f"    SHA-256 Resmi : {p.get('sha256', '-')}")
+            print("-" * 70)
+        print(
+            "\nInstruksi: Unggah 4 salinan berkas ke Google Drive dan isi ID-nya di config/mirrors.json.\n"
+        )
+        return 0
 
     # Identifikasi aplikasi yang dipilih
     selected_apps: list[str] = []

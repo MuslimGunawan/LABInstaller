@@ -83,6 +83,8 @@ def main() -> int:
         or args.selftest
         or args.version
         or args.verify
+        or args.hosting_list
+        or args.clean_cache
     )
 
     if is_cli:

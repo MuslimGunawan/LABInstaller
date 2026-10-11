@@ -19,10 +19,11 @@ for %%A in (%*) do (
     if "%%A"=="--version" set "IS_AUTOMATED=1"
     if "%%A"=="--unattended" set "IS_AUTOMATED=1"
     if "%%A"=="--cli" set "IS_AUTOMATED=1"
+    if "%%A"=="--hosting-list" set "IS_AUTOMATED=1"
 )
 
 :: 3. Periksa Hak Administrator (hanya bila mode interaktif penuh)
-if "%IS_AUTOMATED%"=="0" (
+if "!IS_AUTOMATED!"=="0" (
     fltmc >nul 2>&1
     if %ERRORLEVEL% neq 0 (
         echo [INFO] Meminta hak Administrator untuk menjalankan instalasi...
@@ -34,15 +35,18 @@ if "%IS_AUTOMATED%"=="0" (
 :: 4. Deteksi Interpreter Python (Prioritaskan runtime portabel internal)
 set "PYTHON_EXE=%~dp0system\runtime\python\python.exe"
 set "PYTHONW_EXE=%~dp0system\runtime\python\pythonw.exe"
+set "DEV_VENV_PY=%~dp0.venv\Scripts\python.exe"
 
 if exist "%PYTHONW_EXE%" (
-    if "%IS_AUTOMATED%"=="1" (
+    if "!IS_AUTOMATED!"=="1" (
         set "RUN_PYTHON=%PYTHON_EXE%"
     ) else (
         set "RUN_PYTHON=%PYTHONW_EXE%"
     )
 ) else if exist "%PYTHON_EXE%" (
     set "RUN_PYTHON=%PYTHON_EXE%"
+) else if exist "%DEV_VENV_PY%" (
+    set "RUN_PYTHON=%DEV_VENV_PY%"
 ) else (
     :: Fallback bila runtime portabel belum diekstrak (gunakan python sistem untuk bootstrap)
     where python >nul 2>&1
@@ -57,7 +61,7 @@ if exist "%PYTHONW_EXE%" (
             set "RUN_PYTHON=%PYTHON_EXE%"
         ) else (
             echo [GAGAL] Pemulihan runtime gagal. Silakan hubungi admin lab.
-            if "%IS_AUTOMATED%"=="0" pause
+            if "!IS_AUTOMATED!"=="0" pause
             exit /b 2
         )
     )
@@ -86,7 +90,7 @@ if %EXIT_CODE% equ 10 (
 )
 
 :: 8. Tangani Selesai
-if "%IS_AUTOMATED%"=="1" (
+if "!IS_AUTOMATED!"=="1" (
     exit /b %EXIT_CODE%
 )
 
