@@ -1,0 +1,20 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# System local data (PRD 6D.4, 6D.8)
+# Seluruh system/data/ TIDAK PERNAH masuk Git
+system/data/
+data/
+
+# Environment and development scratch
+.venv/
+env/
+venv/
+*.tmp
+*.part
+scratch/
