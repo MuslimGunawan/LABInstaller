@@ -1,0 +1,14 @@
+<Configuration>
+  <VGpu>Enable</VGpu>
+  <Networking>Enable</Networking>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>D:\KP</HostFolder>
+      <SandboxFolder>C:\KP</SandboxFolder>
+      <ReadOnly>false</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <Command>powershell.exe -ExecutionPolicy Bypass -NoExit -File "C:\KP\system\tools\sandbox\Run-SandboxTest.ps1"</Command>
+  </LogonCommand>
+</Configuration>

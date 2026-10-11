@@ -10,11 +10,14 @@ from __future__ import annotations
 import importlib
 import platform
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 from labinstaller.core.config import ConfigManager, check_all_configs
-from labinstaller.core.logger import log_info
+from labinstaller.core.detect import AppStatus, detect_app
+from labinstaller.core.installer import InstallResult, InstallStatus, WingetInstaller
+from labinstaller.core.logger import log_info, log_warn
 from labinstaller.core.paths import (
     ROOT_DIR,
     START_BAT,
@@ -92,8 +95,9 @@ def resolve_dependencies(
 def build_execution_plan(
     selected_app_ids: list[str],
     config_manager: ConfigManager,
+    detect_installed: bool = True,
 ) -> PlanResult:
-    """Menyusun rencana instalasi berurutan berdasarkan dependensi dan status sumber."""
+    """Menyusun rencana instalasi berurutan berdasarkan dependensi dan status deteksi sistem."""
     all_apps = config_manager.apps
     apps_by_id = {app["id"]: app for app in all_apps}
     warnings: list[str] = list(config_manager.warnings)
@@ -107,14 +111,30 @@ def build_execution_plan(
         meta = apps_by_id[app_id]
         status_sumber = meta.get("statusSumber", "tersedia")
 
-        # Status awal sebelum deteksi nyata di M2
-        if status_sumber == "menunggu-hosting":
-            status = "MENUNGGU_SUMBER"
+        installed_ver: str | None = None
+        status = "BELUM_TERPASANG"
+
+        if detect_installed:
+            det = detect_app(meta, use_cache=True)
+            installed_ver = det.installed_version
+            if det.status == AppStatus.SUDAH_TERPASANG:
+                status = "SUDAH_TERPASANG"
+            elif det.status == AppStatus.BUTUH_UPDATE:
+                status = "BUTUH_UPDATE"
+            elif det.status == AppStatus.RUSAK:
+                status = "RUSAK"
+            elif status_sumber == "menunggu-hosting":
+                status = "MENUNGGU_SUMBER"
+            else:
+                status = "BELUM_TERPASANG"
         else:
-            status = "BELUM_TERPASANG"
+            if status_sumber == "menunggu-hosting":
+                status = "MENUNGGU_SUMBER"
 
         ukuran = int(meta.get("ukuran", 0))
-        total_bytes += ukuran
+        # Hanya hitung ukuran jika aplikasi belum terpasang atau butuh update
+        if status != "SUDAH_TERPASANG":
+            total_bytes += ukuran
 
         plan_items.append(
             AppPlanItem(
@@ -122,7 +142,7 @@ def build_execution_plan(
                 nama=meta.get("nama", app_id),
                 kategori=meta.get("kategori", "Umum"),
                 versi_target=meta.get("versiTarget", "unknown"),
-                versi_terpasang=None,
+                versi_terpasang=installed_ver,
                 status=status,
                 metode=meta.get("metode", "winget"),
                 ukuran_bytes=ukuran,
@@ -132,7 +152,6 @@ def build_execution_plan(
         )
 
     # Estimasi waktu unduhan berdasarkan koneksi 20 Mbps (±2.5 MB/s)
-    # total_bytes / (2.5 * 1024 * 1024) detik -> menit
     mbps_effective_bytes_per_sec = (20.0 * 1024 * 1024) / 8.0  # ~2.62 MB/s
     estimasi_menit = round((total_bytes / mbps_effective_bytes_per_sec) / 60.0, 1)
 
@@ -142,6 +161,79 @@ def build_execution_plan(
         estimasi_menit=estimasi_menit,
         peringatan=warnings,
     )
+
+
+def execute_installation_plan(
+    plan: PlanResult,
+    config_manager: ConfigManager,
+    installer: WingetInstaller | None = None,
+    on_app_start: Callable[[str, int, int], None] | None = None,
+    on_app_progress: Callable[[str, int, str], None] | None = None,
+    on_app_finish: Callable[[str, InstallResult], None] | None = None,
+    is_cancelled: Callable[[], bool] | None = None,
+) -> list[InstallResult]:
+    """Mengeksekusi rencana instalasi berurutan dengan penanganan pembatalan dan verifikasi."""
+    if installer is None:
+        installer = WingetInstaller()
+
+    all_apps = config_manager.apps
+    apps_by_id = {app["id"]: app for app in all_apps}
+    results: list[InstallResult] = []
+
+    total_items = len(plan.items)
+    for idx, item in enumerate(plan.items, 1):
+        if is_cancelled and is_cancelled():
+            log_warn(
+                f"Eksekusi rencana dihentikan sebelum memproses {item.nama}.",
+                app_id=item.app_id,
+            )
+            res = InstallResult(
+                app_id=item.app_id,
+                app_name=item.nama,
+                status=InstallStatus.DIBATALKAN,
+                message="Instalasi dibatalkan oleh pengguna.",
+            )
+            results.append(res)
+            if on_app_finish:
+                on_app_finish(item.app_id, res)
+            continue
+
+        meta = apps_by_id.get(item.app_id)
+        if not meta:
+            continue
+
+        if on_app_start:
+            on_app_start(item.app_id, idx, total_items)
+
+        # Jika sudah terpasang dan sesuai, skip (PRD 6A.2)
+        if item.status == "SUDAH_TERPASANG":
+            res = InstallResult(
+                app_id=item.app_id,
+                app_name=item.nama,
+                status=InstallStatus.DILEWATI,
+                message=f"Sudah terpasang dan sesuai ({item.versi_terpasang}).",
+            )
+            results.append(res)
+            if on_app_finish:
+                on_app_finish(item.app_id, res)
+            continue
+
+        current_app_id = item.app_id
+
+        def app_prog_wrapper(pct: int, msg: str, target_id: str = current_app_id) -> None:
+            if on_app_progress:
+                on_app_progress(target_id, pct, msg)
+
+        res = installer.install(
+            meta,
+            on_progress=app_prog_wrapper,
+            is_cancelled=is_cancelled,
+        )
+        results.append(res)
+        if on_app_finish:
+            on_app_finish(item.app_id, res)
+
+    return results
 
 
 def run_dry_run(
@@ -216,6 +308,8 @@ def run_selftest() -> int:
         "labinstaller.core.logger",
         "labinstaller.core.config",
         "labinstaller.core.preflight",
+        "labinstaller.core.detect",
+        "labinstaller.core.installer",
         "labinstaller.core.engine",
         "labinstaller.cli",
         "labinstaller.ui.strings_id",

@@ -62,9 +62,55 @@ Dokumen ini berisi prosedur pengujian langkah-demi-langkah yang dapat dijalankan
 
 ---
 
-## 3. Skenario Pengujian Lanjutan (Milestone Selanjutnya)
-- **M2:** Pengujian instalasi silent via winget di Windows Sandbox (idempotent, jalankan 2x).
+## 3. Skenario Pengujian Milestone 2 (M2: Deteksi & Instalasi Standar Winget)
+
+### Skenario M2-1: Pengujian Isolasi Penuh di Windows Sandbox
+1. **Prasyarat:** Windows 10/11 Pro/Enterprise dengan fitur Windows Sandbox aktif.
+2. **Langkah:** Klik dua kali pada `system\tools\sandbox\labinstaller.wsb`.
+3. **Hasil yang Diharapkan:**
+   - Windows Sandbox terbuka dengan folder proyek ter-mount sebagai `C:\KP`.
+   - Skrip `Run-SandboxTest.ps1` berjalan otomatis:
+     - Melakukan uji mandiri (`Start.bat --selftest`) -> LULUS.
+     - Memvalidasi seluruh skema konfigurasi (`Start.bat --check-config`) -> LULUS.
+     - Menjalankan simulasi rencana standar (`Start.bat --dry-run --profile standar`) -> LULUS.
+     - Menjalankan seluruh pengujian unit pytest (34 pengujian) -> 100% LULUS.
+     - Catatan log otomatis ditulis ke `system\data\logs\sandbox-m2-<timestamp>.log`.
+
+### Skenario M2-2: Pembedaan Akurat 3 Status Deteksi
+1. **Langkah:** Jalankan `Start.bat` pada sistem yang belum terpasang software standar.
+2. **Hasil yang Diharapkan:**
+   - Kolom status menampilkan **Belum Terpasang** untuk aplikasi yang tidak ditemukan di sistem.
+   - Aplikasi yang belum terpasang otomatis dicentang `[✓]`.
+3. **Langkah:** Jalankan `Start.bat` pada komputer yang memiliki aplikasi versi lama (misal VS Code atau Git versi lama).
+4. **Hasil yang Diharapkan:**
+   - Kolom status menampilkan **Butuh Update (vA.B -> vX.Y)**.
+   - Kolom 'Terpasang' menampilkan versi terpasang di sistem.
+5. **Langkah:** Jalankan `Start.bat` pada komputer yang sudah terpasang software sesuai target.
+6. **Hasil yang Diharapkan:**
+   - Kolom status menampilkan **Sudah Terpasang (vX.Y)** dan centang otomatis dinonaktifkan agar tidak menginstal ulang sia-sia.
+
+### Skenario M2-3: Uji Pemantauan Progres Ganda (Per Aplikasi & Total)
+1. **Langkah:** Pilih 2 atau lebih aplikasi, lalu klik **INSTAL TERPILIH**.
+2. **Hasil yang Diharapkan:**
+   - Tidak ada jendela konsol hitam (`cmd.exe`) yang muncul (flag `CREATE_NO_WINDOW` aktif).
+   - Tombol berubah menjadi **Batalkan**.
+   - Progress bar bagian atas menampilkan persentase unduh/pasang per aplikasi saat ini (0%–100%).
+   - Progress bar bagian bawah menampilkan progres total instalasi (misal: "Progres Total: 1 dari 2 aplikasi").
+   - Panel log bawah menampilkan log real-time dengan prefix `[VS Code]`, `[Git]`, dll.
+
+### Skenario M2-4: Uji Sifat Idempoten (Idempotency) & Verifikasi Pasca-Instalasi
+1. **Langkah:** Selesaikan instalasi seluruh aplikasi standar sampai muncul dialog "Instalasi Selesai".
+2. **Langkah:** Tanpa menutup program, klik kembali **Pindai Sistem** atau **INSTAL TERPILIH**.
+3. **Hasil yang Diharapkan:**
+   - Seluruh aplikasi yang baru saja terpasang kini berstatus **Sudah Terpasang**.
+   - Program melaporkan "Seluruh aplikasi yang dipilih sudah terpasang dan sesuai dengan versi target" dan melewati (SKIP) instalasi tanpa mendownload ulang.
+
+---
+
+## 4. Skenario Pengujian Lanjutan (Milestone Selanjutnya)
 - **M3:** Ekstraksi arsip ZIP, 7Z, dan RAR di PC tanpa software archiver terpasang.
 - **M4 & M5:** Uji koeksistensi Laragon (port 80/3306) dan XAMPP (port 8080/3307) dengan halaman verifikasi `lab-check.php`.
 - **M6:** Pengujian PHP 8.5.11 NTS di `C:\php`, aktivasi ekstensi `php.ini`, dan eksekusi Composer sebagai akun mahasiswa standar.
 - **M6c:** Verifikasi `flutter doctor -v` dan build Android / Windows desktop.
+- **M7:** Menu Verifikasi mandiri (V) dan ekspor laporan CSV/TXT.
+

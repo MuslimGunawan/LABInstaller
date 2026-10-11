@@ -58,6 +58,7 @@ jobs:
       - name: Gerbang 8 - Simulasi Rencana (--dry-run seluruh profil)
         shell: cmd
         run: |
+          Start.bat --dry-run --profile standar
           Start.bat --dry-run --profile web
           Start.bat --dry-run --profile flutter
           Start.bat --dry-run --profile gis

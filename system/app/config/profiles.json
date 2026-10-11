@@ -1,6 +1,21 @@
 {
   "profiles": [
     {
+      "id": "standar",
+      "nama": "Aplikasi Standar Lab (Winget)",
+      "deskripsi": "6 Aplikasi standar laboratorium via Winget: VS Code, Apache NetBeans (+ JDK 21), QGIS, Node.js LTS, Python, dan Git.",
+      "apps": [
+        "vcredist",
+        "vscode",
+        "temurin-jdk21",
+        "netbeans",
+        "qgis",
+        "nodejs",
+        "python-user",
+        "git"
+      ]
+    },
+    {
       "id": "web",
       "nama": "Lab Pemrograman Web",
       "deskripsi": "Paket web stack lengkap: VS Code, Git, Node.js, Laragon 6, XAMPP, PHP 8.5, Composer, dan Laravel.",
