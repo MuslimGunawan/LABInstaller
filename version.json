@@ -1,7 +1,7 @@
 {
-  "version": "1.0.5",
+  "version": "1.0.6",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-13",
-  "description": "v1.0.5: Penambahan Android Studio, QGIS, VS 2022 C++, Laragon Custom Suite GDrive, isolasi port tombol admin XAMPP/Laragon, dan phpMyAdmin anti-refused"
+  "description": "v1.0.6: Fitur otomatis pembebasan Port 80 dari PID 4 (System / IIS / W3SVC / HTTP.sys) untuk Laragon"
 }

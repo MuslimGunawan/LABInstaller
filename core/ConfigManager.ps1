@@ -22,8 +22,108 @@ function Start-FullEnvironmentConfiguration {
     Write-LogSuccess "Semua konfigurasi port dan environment berhasil diterapkan secara optimal!"
 }
 
+function Resolve-Port80Conflict {
+    Write-LogStep "Mendeteksi & Mengamankan Port 80 dari Konflik PID 4 (System / IIS)..."
+
+    $port80Conn = Get-NetTCPConnection -LocalPort 80 -State Listen -ErrorAction SilentlyContinue
+
+    if (-not $port80Conn) {
+        Write-LogSuccess "Port 80 BERSIH: Tidak ada proses lain yang mengunci Port 80. Siap untuk Apache Laragon!"
+        return $true
+    }
+
+    $isPid4 = $false
+    $otherProcesses = @()
+
+    foreach ($conn in $port80Conn) {
+        $owningPid = $conn.OwningProcess
+        if ($owningPid -eq 4) {
+            $isPid4 = $true
+        } else {
+            $proc = Get-Process -Id $owningPid -ErrorAction SilentlyContinue
+            $procName = if ($proc) { $proc.ProcessName } else { "PID $owningPid" }
+            $otherProcesses += [PSCustomObject]@{ Id = $owningPid; Name = $procName }
+        }
+    }
+
+    # KASUS 1: Port 80 dikunci oleh PID 4 (System NT Kernel / HTTP.sys driver)
+    if ($isPid4) {
+        Write-LogWarning "Terdeteksi Port 80 sedang dikunci oleh: System (PID 4 / Kernel HTTP.sys)!"
+        Write-LogInfo "Memulai pelepasan otomatis Port 80 dari layanan Windows..."
+
+        # Layanan-layanan Windows yang mendaftarkan port 80 ke HTTP.sys
+        $culpritServices = @(
+            @{ Name = "W3SVC"; Desc = "World Wide Web Publishing Service (IIS)" },
+            @{ Name = "WAS"; Desc = "Windows Process Activation Service" },
+            @{ Name = "MsDepSvc"; Desc = "Web Deployment Agent Service" },
+            @{ Name = "BranchCache"; Desc = "BranchCache Service" },
+            @{ Name = "ReportServer"; Desc = "SQL Server Reporting Services" },
+            @{ Name = "SQLBrowser"; Desc = "SQL Server Browser" }
+        )
+
+        foreach ($item in $culpritServices) {
+            $svc = Get-Service -Name $item.Name -ErrorAction SilentlyContinue
+            if ($svc) {
+                if ($svc.Status -eq "Running") {
+                    Write-LogWarning "Menghentikan layanan '$($item.Name)' ($($item.Desc))..."
+                    Stop-Service -Name $item.Name -Force -ErrorAction SilentlyContinue
+                }
+                # Nonaktifkan agar tidak otomatis mengunci port saat PC Lab di-reboot
+                Set-Service -Name $item.Name -StartupType Disabled -ErrorAction SilentlyContinue
+                Write-LogSuccess "Layanan '$($item.Name)' dinonaktifkan (Disabled)."
+            }
+        }
+
+        # Bersihkan URL Reservation liar di HTTP.sys
+        try {
+            netsh http delete urlacl url=http://+:80/ 2>$null | Out-Null
+            netsh http delete urlacl url=http://*:80/ 2>$null | Out-Null
+        } catch {}
+
+        Start-Sleep -Seconds 1
+
+        # Verifikasi apakah PID 4 sudah lepas
+        $checkAgain = Get-NetTCPConnection -LocalPort 80 -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -eq 4 }
+        if (-not $checkAgain) {
+            Write-LogSuccess "SUKSES: Port 80 BERHASIL DIBEBASKAN dari PID 4! Apache Laragon kini bebas berjalan."
+            return $true
+        } else {
+            Write-LogWarning "PID 4 masih mendengarkan di Port 80. Mencoba melepaskan IP Listen binding..."
+            try {
+                netsh http delete iplisten ipaddress=0.0.0.0 2>$null | Out-Null
+                netsh http delete iplisten ipaddress=127.0.0.1 2>$null | Out-Null
+            } catch {}
+            Start-Sleep -Seconds 1
+        }
+    }
+
+    # KASUS 2: Proses lain di luar PID 4 (misal sisa Apache/Nginx zombie)
+    if ($otherProcesses.Count -gt 0) {
+        foreach ($op in $otherProcesses) {
+            Write-LogWarning "Port 80 sedang digunakan oleh: $($op.Name) (PID: $($op.Id))"
+            if ($op.Name -match '^(httpd|nginx|apache2|skype)$') {
+                Write-LogInfo "Menghentikan proses background '$($op.Name)' (PID: $($op.Id))..."
+                Stop-Process -Id $op.Id -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    # Verifikasi Akhir
+    $finalCheck = Get-NetTCPConnection -LocalPort 80 -State Listen -ErrorAction SilentlyContinue
+    if (-not $finalCheck) {
+        Write-LogSuccess "Port 80 KINI 100% BEBAS & SIAP DIGUNAKAN OLEH LARAGON!"
+        return $true
+    } else {
+        Write-LogWarning "Port 80 masih aktif oleh PID $(($finalCheck | Select-Object -ExpandProperty OwningProcess) -join ', ')."
+        return $false
+    }
+}
+
 function Configure-WebServerPorts {
     Write-LogStep "Memeriksa & Mengisolasi Port Web Server (Laragon vs XAMPP)..."
+
+    # 0. Bebaskan Port 80 dari PID 4 (System / IIS) terlebih dahulu
+    Resolve-Port80Conflict | Out-Null
 
     $laragonDir = "C:\laragon"
     $xamppDir   = "C:\xampp"
