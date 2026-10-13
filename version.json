@@ -1,7 +1,7 @@
 {
-  "version": "1.0.11",
+  "version": "1.0.12",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-13",
-  "description": "v1.0.11: Perbaikan XAMPP MySQL (encoding ASCII non-BOM & pembersihan lock PID), tombol Admin membuka Chrome/Edge bebas error IE11, dan isolasi Laragon Nginx (Use=0)"
+  "description": "v1.0.12: Pengaktifan Laragon Nginx di Port 8081 non-BOM (Apache + Nginx aktif bersamaan) & Asosiasi System Default Browser Chrome/Edge untuk tombol Web/Database Laragon & Admin XAMPP bebas error IE11"
 }

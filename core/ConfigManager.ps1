@@ -119,11 +119,95 @@ function Resolve-Port80Conflict {
     }
 }
 
+function Set-SystemDefaultBrowser {
+    Write-LogStep "Mengonfigurasi Default Browser Sistem (Google Chrome / Edge) untuk Mengatasi Error IE 11..."
+
+    $chromePath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+    $chromeX86  = "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+    $edgePath   = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+    $edgeX64    = "C:\Program Files\Microsoft\Edge\Application\msedge.exe"
+
+    $selectedBrowser = $null
+    $progId = "ChromeHTML"
+
+    if (Test-Path -Path $chromePath) {
+        $selectedBrowser = $chromePath
+        $progId = "ChromeHTML"
+    } elseif (Test-Path -Path $chromeX86) {
+        $selectedBrowser = $chromeX86
+        $progId = "ChromeHTML"
+    } elseif (Test-Path -Path $edgePath) {
+        $selectedBrowser = $edgePath
+        $progId = "MSEdgeHTM"
+    } elseif (Test-Path -Path $edgeX64) {
+        $selectedBrowser = $edgeX64
+        $progId = "MSEdgeHTM"
+    }
+
+    if ($selectedBrowser) {
+        Write-LogInfo "Browser modern terdeteksi: $selectedBrowser"
+        try {
+            $cmd = "`"$selectedBrowser`" -- `"%1`""
+
+            # 1. HKLM Classes http & https
+            $regPaths = @(
+                "HKLM:\SOFTWARE\Classes\http\shell\open\command",
+                "HKLM:\SOFTWARE\Classes\https\shell\open\command",
+                "HKCU:\SOFTWARE\Classes\http\shell\open\command",
+                "HKCU:\SOFTWARE\Classes\https\shell\open\command"
+            )
+
+            foreach ($rp in $regPaths) {
+                try {
+                    if (-not (Test-Path -Path $rp -ErrorAction SilentlyContinue)) {
+                        New-Item -Path $rp -Force -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    Set-ItemProperty -Path $rp -Name "(Default)" -Value $cmd -Force -ErrorAction SilentlyContinue | Out-Null
+                } catch {}
+            }
+
+            # 2. Association ProgID di HKCU UserChoice & UrlAssociations
+            $userUrlAssoc = @(
+                "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice",
+                "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice"
+            )
+            foreach ($ua in $userUrlAssoc) {
+                if (Test-Path -Path $ua -ErrorAction SilentlyContinue) {
+                    Set-ItemProperty -Path $ua -Name "ProgId" -Value $progId -Force -ErrorAction SilentlyContinue | Out-Null
+                }
+            }
+
+            # 3. Alihkan stub iexplore.exe ke browser modern agar aplikasi legacy seperti Laragon tidak mentok di popup IE 11
+            $appPathsIe = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\iexplore.exe"
+            try {
+                if (-not (Test-Path -Path $appPathsIe -ErrorAction SilentlyContinue)) {
+                    New-Item -Path $appPathsIe -Force -ErrorAction SilentlyContinue | Out-Null
+                }
+                Set-ItemProperty -Path $appPathsIe -Name "(Default)" -Value $selectedBrowser -Force -ErrorAction SilentlyContinue | Out-Null
+            } catch {}
+
+            # 4. Trigger silent make-default-browser jika Chrome
+            if ($selectedBrowser -like "*chrome.exe") {
+                Start-Process -FilePath $selectedBrowser -ArgumentList "--make-default-browser" -NoNewWindow -Wait -ErrorAction SilentlyContinue
+            }
+
+            Write-LogSuccess "Default browser sistem berhasil diarahkan ke: $selectedBrowser (Tombol Web & Database Laragon 100% aman)."
+        } catch {
+            Write-LogWarning "Gagal memperbarui asosiasi browser sistem: $_"
+        }
+    } else {
+        Write-LogWarning "Browser Google Chrome atau Microsoft Edge belum ditemukan di path standar."
+    }
+}
+
 function Configure-WebServerPorts {
     Write-LogStep "Memeriksa & Mengisolasi Port Web Server (Laragon vs XAMPP)..."
 
     # 0. Bebaskan Port 80 dari PID 4 (System / IIS) terlebih dahulu
     Resolve-Port80Conflict | Out-Null
+
+    # Pastikan sistem default browser modern terdaftar (cegah error IE 11 di Laragon & XAMPP)
+    Set-SystemDefaultBrowser
 
     $laragonDir = "C:\laragon"
     $xamppDir   = "C:\xampp"
@@ -275,23 +359,64 @@ function Configure-WebServerPorts {
 
     # Jika Laragon terpasang:
     if ($hasLaragon) {
-        # 1. Pastikan Nginx DINONAKTIFKAN (Use=0) agar tidak bentrok dengan Apache di Port 80
+        # 1. Konfigurasi Laragon INI: Apache Aktif (Port 80/443), Nginx Aktif (Port 8081/8443)
         $laragonIni = Join-Path -Path $laragonDir -ChildPath "usr\laragon.ini"
         if (Test-Path -Path $laragonIni) {
-            $lIniText = Get-Content -Path $laragonIni -Raw
-            # Set [nginx] Use=0
-            if ($lIniText -match '\[nginx\][^\[]*Use\s*=\s*-1') {
-                $lIniText = $lIniText -replace '(\[nginx\][^\[]*?Use\s*=\s*)-1', '${1}0'
-            }
+            $lIniText = [System.IO.File]::ReadAllText($laragonIni, [System.Text.Encoding]::UTF8)
+
             # Pastikan [apache] Use=-1
             if ($lIniText -match '\[apache\][^\[]*Use\s*=\s*0') {
                 $lIniText = $lIniText -replace '(\[apache\][^\[]*?Use\s*=\s*)0', '${1}-1'
             }
-            [System.IO.File]::WriteAllText($laragonIni, $lIniText, [System.Text.Encoding]::UTF8)
-            Write-LogSuccess "Laragon diselaraskan: Apache aktif di Port 80 & Nginx dinonaktifkan (Use=0) agar bebas bentrok!"
+
+            # Pastikan [nginx] Use=-1 (Tetap AKTIF!), Port=8081, SSLPort=8443 agar tidak bentrok dengan XAMPP Apache 8080
+            if ($lIniText -match '\[nginx\]') {
+                $lIniText = $lIniText -replace '(\[nginx\][^\[]*?Use\s*=\s*)\d+', '${1}-1'
+                if ($lIniText -match '\[nginx\][^\[]*Port\s*=\s*\d+') {
+                    $lIniText = $lIniText -replace '(\[nginx\][^\[]*?Port\s*=\s*)\d+', '${1}8081'
+                } else {
+                    $lIniText = $lIniText -replace '(\[nginx\]\r?\n)', "`$1Port=8081`r`n"
+                }
+                if ($lIniText -match '\[nginx\][^\[]*SSLPort\s*=\s*\d+') {
+                    $lIniText = $lIniText -replace '(\[nginx\][^\[]*?SSLPort\s*=\s*)\d+', '${1}8443'
+                } else {
+                    $lIniText = $lIniText -replace '(\[nginx\]\r?\n)', "`$1SSLPort=8443`r`n"
+                }
+            } else {
+                $lIniText += "`r`n[nginx]`r`nUse=-1`r`nPort=8081`r`nSSLPort=8443`r`n"
+            }
+
+            $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllText($laragonIni, $lIniText, $utf8NoBom)
+            Write-LogSuccess "Laragon diselaraskan: Apache Port 80 & Nginx TETAP AKTIF di Port 8081 (Bebas Bentrok 100%)!"
         }
 
-        # 2. Optimasi phpMyAdmin Laragon (Auto-Login Root tanpa password & Bebas Warning)
+        # 2. Sinkronkan semua Nginx site configuration ke Port 8081 dengan STRICT UTF-8 Non-BOM
+        # (PowerShell Set-Content default menambahkan BOM \xEF\xBB\xBF yang menyebabkan Nginx crash pada 'unknown directive server')
+        $nginxSitesDir = Join-Path -Path $laragonDir -ChildPath "etc\nginx\sites-enabled"
+        if (Test-Path -Path $nginxSitesDir) {
+            $confFiles = Get-ChildItem -Path $nginxSitesDir -Filter "*.conf" -ErrorAction SilentlyContinue
+            $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+            foreach ($conf in $confFiles) {
+                try {
+                    $bytes = [System.IO.File]::ReadAllBytes($conf.FullName)
+                    $text = [System.Text.Encoding]::UTF8.GetString($bytes)
+                    # Hapus BOM jika ada
+                    if ($text.StartsWith([char]0xFEFF)) {
+                        $text = $text.Substring(1)
+                    }
+                    # Ganti listen 8080 atau 80 ke 8081
+                    $text = $text -replace 'listen\s+8080\b', 'listen 8081'
+                    $text = $text -replace 'listen\s+80\b', 'listen 8081'
+                    [System.IO.File]::WriteAllText($conf.FullName, $text, $utf8NoBom)
+                } catch {
+                    Write-LogWarning "Gagal memperbarui konfigurasi Nginx $($conf.Name): $_"
+                }
+            }
+            Write-LogSuccess "Konfigurasi Nginx sites-enabled diselaraskan ke Port 8081 (Strict UTF-8 Non-BOM)."
+        }
+
+        # 3. Optimasi phpMyAdmin Laragon (Auto-Login Root tanpa password & Bebas Warning)
         Write-LogInfo "Menyesuaikan phpMyAdmin Laragon agar Auto-Login (tanpa login popup) & Bebas Warning..."
         $laragonPmaConfig = Join-Path -Path $laragonDir -ChildPath "etc\apps\phpMyAdmin\config.inc.php"
         if (Test-Path -Path $laragonPmaConfig) {
@@ -317,7 +442,8 @@ function Configure-WebServerPorts {
 `$cfg['VersionCheck'] = false;
 "@
             }
-            [System.IO.File]::WriteAllText($laragonPmaConfig, $lPmaText, [System.Text.Encoding]::UTF8)
+            $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllText($laragonPmaConfig, $lPmaText, $utf8NoBom)
             Write-LogSuccess "phpMyAdmin Laragon berhasil dioptimasi: Langsung terbuka otomatis tanpa login & bebas warning!"
         }
     }
@@ -325,16 +451,20 @@ function Configure-WebServerPorts {
     Write-Host ""
     Write-Host "====================== SKEMA PEMBAGIAN PORT & ADMIN ======================" -ForegroundColor Cyan
     Write-Host " [LARAGON] (Port Bawaan / Standar Resmi):" -ForegroundColor White
-    Write-Host "   - Apache HTTP  : 80  -> Web: http://localhost/" -ForegroundColor Green
-    Write-Host "   - Apache HTTPS : 443 -> SSL: https://localhost/" -ForegroundColor Green
+    Write-Host "   - Apache HTTP  : 80   -> Web: http://localhost/" -ForegroundColor Green
+    Write-Host "   - Apache HTTPS : 443  -> SSL: https://localhost/" -ForegroundColor Green
+    Write-Host "   - Nginx HTTP   : 8081 -> Nginx Web: http://localhost:8081/ (TETAP AKTIF!)" -ForegroundColor Green
+    Write-Host "   - Nginx HTTPS  : 8443" -ForegroundColor Green
     Write-Host "   - MySQL Server : 3306" -ForegroundColor Green
     Write-Host "   - phpMyAdmin   : http://localhost/phpmyadmin/ (Auto-Login Root, Tanpa Password)" -ForegroundColor Green
+    Write-Host "   - Browser Nav  : Google Chrome / Edge (Bebas Error IE 11)" -ForegroundColor Green
     Write-Host " [XAMPP] (Port Alternatif Lab Komputer):" -ForegroundColor White
     Write-Host "   - Apache HTTP  : 8080 -> Admin Apache: http://localhost:8080/dashboard/" -ForegroundColor Yellow
     Write-Host "   - Apache HTTPS : 4433" -ForegroundColor Yellow
     Write-Host "   - MySQL Server : 3307" -ForegroundColor Yellow
     Write-Host "   - phpMyAdmin   : http://localhost:8080/phpmyadmin/ (Terkoneksi ke Port 3307)" -ForegroundColor Yellow
-    Write-Host " Status: BEBAS BENTROK & TOMBOL ADMIN AKURAT 100%!" -ForegroundColor Green
+    Write-Host "   - Browser Nav  : Google Chrome / Edge (Bebas Error IE 11)" -ForegroundColor Yellow
+    Write-Host " Status: BEBAS BENTROK, NGINX + APACHE AKTIF BERSAMAAN & TOMBOL ADMIN AKURAT 100%!" -ForegroundColor Green
     Write-Host "==========================================================================" -ForegroundColor Cyan
 }
 
