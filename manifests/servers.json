@@ -7,6 +7,9 @@
     "priority": 9,
     "registryPattern": "Laragon",
     "pathCheck": "C:\\laragon\\laragon.exe",
+    "directUrl": "https://github.com/leokhoa/laragon/releases/download/6.0.0/laragon-wamp.exe",
+    "directArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=\"C:\\laragon\"",
+    "installType": "exe",
     "customHandler": "Install-LaragonOfficial",
     "postInstallHandler": "Setup-LaragonEnvironment",
     "description": "Lingkungan pengembangan lokal cepat & portabel untuk PHP, Apache, MySQL (Versi 6.0.0 Resmi)."
@@ -15,11 +18,14 @@
     "id": "ApacheFriends.Xampp.8.2",
     "name": "XAMPP 8.2",
     "category": "Web Server Environment",
-    "type": "winget",
+    "type": "hybrid",
     "priority": 10,
     "wingetId": "ApacheFriends.Xampp.8.2",
     "registryPattern": "XAMPP",
     "pathCheck": "C:\\xampp\\xampp-control.exe",
+    "directUrl": "https://sourceforge.net/projects/xampp/files/XAMPP%20Windows/8.2.12/xampp-windows-x64-8.2.12-0-VS16-installer.exe/download",
+    "directArgs": "--mode unattended",
+    "installType": "exe",
     "postInstallHandler": "Setup-XamppEnvironment",
     "description": "Distribusi Apache, MariaDB, PHP, dan Perl dari Apache Friends (Port otomatis disesuaikan agar tidak bentrok dengan Laragon)."
   }

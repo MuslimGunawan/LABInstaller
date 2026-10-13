@@ -100,17 +100,7 @@ function Start-SmartInstallation {
         $isUpgrade = ($item.Status -eq "UPDATE_AVAILABLE")
         $success = $false
 
-        if ($raw.type -eq "winget") {
-            $success = Invoke-WingetInstall -Package $raw -IsUpgrade:$isUpgrade
-        }
-        elseif ($raw.type -eq "custom") {
-            $handler = $raw.customHandler
-            if ($handler -and (Get-Command $handler -ErrorAction SilentlyContinue)) {
-                $success = & $handler
-            } else {
-                Write-LogError "Custom handler '$handler' tidak ditemukan untuk $($raw.name)."
-            }
-        }
+        $success = Invoke-PackageInstall -Package $raw -IsUpgrade:$isUpgrade
 
         # Jalankan post-install handler jika ada dan proses berhasil
         if ($success -and $raw.postInstallHandler) {

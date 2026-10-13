@@ -1,7 +1,7 @@
 {
-  "version": "1.0.2",
+  "version": "1.0.3",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-13",
-  "description": "v1.0.2: Pemindaian instan Registry & CLI (100% offline, anti-hang di VM/Ghost Spectre), proteksi QuickEdit mode, dan pendeteksian bebas macet."
+  "description": "v1.0.3: Arsitektur Hibrida Tangguh (WinGet + Auto Direct Vendor Fallback), P0 Visual C++ Redistributable, Deteksi Instan Offline Registry/CLI, dan Proteksi QuickEdit Mode"
 }

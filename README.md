@@ -33,7 +33,8 @@ Sistem otomasi berbasis PowerShell dan Windows Package Manager (`winget`) untuk 
 
 | Prioritas | Kategori | Nama Software | Pengenal / Metode |
 | :---: | :--- | :--- | :--- |
-| **P1** | **Version Control** | Git for Windows | `Git.Git` (Winget) |
+| **P0** | **System Dependency** | Visual C++ 2015-2022 Redistributable (x64) | Microsoft Official (`VC_redist.x64.exe`) |
+| **P1** | **Version Control** | Git for Windows | `Git.Git` (Winget / Direct Fallback) |
 | **P2** | **SDK & Runtime** | Java Temurin OpenJDK 21 LTS | `EclipseAdoptium.Temurin.21.JDK` + `JAVA_HOME` |
 | **P3** | **Runtime** | Python 3.12 | `Python.Python.3.12` + Auto PATH |
 | **P4** | **Runtime** | Node.js (LTS) | `OpenJS.NodeJS.LTS` (Vite, NPM) |
