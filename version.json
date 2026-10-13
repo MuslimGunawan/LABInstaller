@@ -1,7 +1,7 @@
 {
-  "version": "1.0.1",
+  "version": "1.0.2",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-13",
-  "description": "v1.0.1: Pemindaian instan berkecepatan tinggi, PHP 8.5, Laragon 6.0.0, XAMPP, NetBeans, Arduino IDE, Node.js LTS, Manajemen Port Otomatis, dan Fitur Double Verification"
+  "description": "v1.0.2: Pemindaian instan Registry & CLI (100% offline, anti-hang di VM/Ghost Spectre), proteksi QuickEdit mode, dan pendeteksian bebas macet."
 }

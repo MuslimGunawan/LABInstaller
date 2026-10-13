@@ -7,6 +7,36 @@
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+# Nonaktifkan QuickEdit Mode agar klik mouse pada konsol tidak membekukan script
+try {
+    $codeQE = @"
+using System;
+using System.Runtime.InteropServices;
+public class ConsoleQuickEditBoot {
+    const uint ENABLE_QUICK_EDIT = 0x0040;
+    const uint ENABLE_EXTENDED = 0x0080;
+    [DllImport("kernel32.dll")] static extern IntPtr GetStdHandle(int n);
+    [DllImport("kernel32.dll")] static extern bool GetConsoleMode(IntPtr h, out uint m);
+    [DllImport("kernel32.dll")] static extern bool SetConsoleMode(IntPtr h, uint m);
+    public static void Disable() {
+        try {
+            IntPtr h = GetStdHandle(-10);
+            uint m;
+            if (GetConsoleMode(h, out m)) {
+                m &= ~ENABLE_QUICK_EDIT;
+                m |= ENABLE_EXTENDED;
+                SetConsoleMode(h, m);
+            }
+        } catch {}
+    }
+}
+"@
+    if (-not ([System.Management.Automation.PSTypeName]'ConsoleQuickEditBoot').Type) {
+        Add-Type -TypeDefinition $codeQE -ErrorAction SilentlyContinue
+    }
+    [ConsoleQuickEditBoot]::Disable()
+} catch {}
+
 # 1. Tangkap Lokasi Aktif Terminal Pemanggil
 $currentLocation = (Get-Location).ProviderPath
 if ([string]::IsNullOrWhiteSpace($currentLocation)) {

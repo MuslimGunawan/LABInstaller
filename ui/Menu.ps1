@@ -16,8 +16,8 @@ function Start-SmartInstallation {
         return
     }
 
-    # Muat cache winget secara cepat (1 detik untuk seluruh sistem)
-    Initialize-WingetCache -ForceRefresh | Out-Null
+    # Muat cache Registry Windows secara instan (offline & anti-hang)
+    Initialize-RegistryCache -ForceRefresh | Out-Null
 
     Write-Host ""
     Write-Host "Memindai $($manifestPackages.Count) paket sesuai urutan prioritas dependensi..." -ForegroundColor Cyan
@@ -151,8 +151,8 @@ function Show-SystemScanOnly {
     Write-LogStep "PINDAI CEPAT STATUS SOFTWARE SAAT INI..."
     $manifestPackages = Load-AllManifestPackages -ManifestDir (Join-Path -Path $ScriptRootDirectory -ChildPath "manifests")
     
-    # Inisialisasi cache winget instan
-    Initialize-WingetCache | Out-Null
+    # Inisialisasi cache Registry Windows instan
+    Initialize-RegistryCache | Out-Null
 
     $scanResults = @()
     foreach ($pkg in $manifestPackages) {

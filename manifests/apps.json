@@ -6,6 +6,7 @@
     "type": "winget",
     "priority": 11,
     "wingetId": "Microsoft.VisualStudioCode",
+    "registryPattern": "(Visual Studio Code|VS Code)",
     "verifyCommand": "code",
     "verifyArgs": ["--version"],
     "description": "Editor kode resmi dari Microsoft dengan dukungan ekstensi lengkap."
@@ -17,6 +18,8 @@
     "type": "winget",
     "priority": 12,
     "wingetId": "Apache.NetBeans",
+    "registryPattern": "NetBeans",
+    "pathCheck": "C:\\Program Files\\NetBeans*\\bin\\netbeans64.exe",
     "description": "IDE resmi Apache untuk pengembangan Java, PHP, HTML5, dan C/C++."
   },
   {
@@ -26,6 +29,8 @@
     "type": "winget",
     "priority": 13,
     "wingetId": "ArduinoSA.IDE.stable",
+    "registryPattern": "Arduino",
+    "pathCheck": "C:\\Program Files\\Arduino IDE\\Arduino IDE.exe",
     "description": "IDE resmi dari Arduino SA untuk pemrograman mikrokontroler dan board IoT."
   },
   {
@@ -35,6 +40,8 @@
     "type": "winget",
     "priority": 14,
     "wingetId": "Google.Chrome",
+    "registryPattern": "Google Chrome",
+    "pathCheck": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     "verifyCommand": "chrome",
     "verifyArgs": ["--version"],
     "description": "Browser web resmi dari Google untuk kebutuhan browsing dan web development."
@@ -46,6 +53,8 @@
     "type": "winget",
     "priority": 15,
     "wingetId": "Oracle.VirtualBox",
+    "registryPattern": "VirtualBox",
+    "pathCheck": "C:\\Program Files\\Oracle\\VirtualBox\\VirtualBox.exe",
     "verifyCommand": "VBoxManage",
     "verifyArgs": ["--version"],
     "description": "Perangkat lunak virtualisasi open-source untuk menjalankan OS di lingkungan virtual."

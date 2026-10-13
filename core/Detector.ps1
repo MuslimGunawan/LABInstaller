@@ -1,62 +1,38 @@
 # ==============================================================================
-# LABInstaller - Core Detector (High-Performance Engine)
-# Mendeteksi status paket secara instan dengan caching Winget in-memory
+# LABInstaller - Core Detector (Zero-Hang Hybrid Engine)
+# Pendeteksian instan berbasis Windows Registry & CLI (100% Offline & Anti-Freeze)
 # ==============================================================================
 
-$global:WingetCache = $null
+$global:RegistryAppCache = $null
 
-function Initialize-WingetCache {
+function Initialize-RegistryCache {
     param([switch]$ForceRefresh)
 
-    if ($global:WingetCache -and -not $ForceRefresh) {
-        return $global:WingetCache
+    if ($global:RegistryAppCache -and -not $ForceRefresh) {
+        return $global:RegistryAppCache
     }
 
-    $global:WingetCache = @{}
-    Write-LogInfo "Memuat basis data paket terpasang Windows (Caching)..."
+    $global:RegistryAppCache = @()
 
-    try {
-        $rawList = winget list 2>&1
-        $headerIndex = -1
+    $uninstallKeys = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
+    )
 
-        for ($i = 0; $i -lt $rawList.Count; $i++) {
-            if ($rawList[$i] -match "---") {
-                $headerIndex = $i
-                break
-            }
-        }
-
-        if ($headerIndex -ge 0) {
-            for ($j = $headerIndex + 1; $j -lt $rawList.Count; $j++) {
-                $line = $rawList[$j].Trim()
-                if ([string]::IsNullOrWhiteSpace($line)) { continue }
-
-                # Split berdasarkan multiple whitespace
-                $tokens = $line -split '\s{2,}' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-                if ($tokens.Count -ge 3) {
-                    $pkgName = $tokens[0].Trim()
-                    $pkgId   = $tokens[1].Trim()
-                    $pkgVer  = $tokens[2].Trim()
-                    $pkgAvail = if ($tokens.Count -ge 4) { $tokens[3].Trim() } else { $null }
-
-                    $item = @{
-                        Name      = $pkgName
-                        Installed = $pkgVer
-                        Available = $pkgAvail
-                    }
-
-                    $global:WingetCache[$pkgId] = $item
-                    # Simpan juga dengan key lowercase untuk pencarian toleran
-                    $global:WingetCache[$pkgId.ToLower()] = $item
+    foreach ($key in $uninstallKeys) {
+        Get-ItemProperty $key -ErrorAction SilentlyContinue | ForEach-Object {
+            if ($_.DisplayName) {
+                $global:RegistryAppCache += [PSCustomObject]@{
+                    DisplayName     = $_.DisplayName.Trim()
+                    DisplayVersion  = if ($_.DisplayVersion) { $_.DisplayVersion.Trim() } else { "Terpasang" }
+                    InstallLocation = if ($_.InstallLocation) { $_.InstallLocation.Trim() } else { "" }
                 }
             }
         }
     }
-    catch {
-        Write-LogWarning "Gagal memuat cache Winget: $_"
-    }
 
-    return $global:WingetCache
+    return $global:RegistryAppCache
 }
 
 function Get-PackageStatus {
@@ -65,91 +41,82 @@ function Get-PackageStatus {
         [PSCustomObject]$Package
     )
 
+    if (-not $global:RegistryAppCache) {
+        Initialize-RegistryCache | Out-Null
+    }
+
     $result = [PSCustomObject]@{
         Id               = $Package.id
         Name             = $Package.name
         Category         = $Package.category
         Type             = $Package.type
         Priority         = if ($Package.priority) { [int]$Package.priority } else { 99 }
-        Status           = "UNKNOWN" # NOT_INSTALLED, UPDATE_AVAILABLE, UP_TO_DATE
+        Status           = "NOT_INSTALLED"
         InstalledVersion = "-"
         TargetVersion    = "Terbaru"
-        Details          = ""
+        Details          = "Belum terpasang di sistem operasi."
         RawPackage       = $Package
     }
 
-    if ($Package.type -eq "winget") {
-        # Pastikan cache winget sudah aktif
-        if (-not $global:WingetCache) {
-            Initialize-WingetCache | Out-Null
+    # 1. Jalur Pemeriksaan 1: Path Spesifik Disk (pathCheck)
+    if (-not [string]::IsNullOrWhiteSpace($Package.pathCheck)) {
+        $resolvedPaths = @()
+        if ($Package.pathCheck -match '\*') {
+            $resolvedPaths = Get-Item -Path $Package.pathCheck -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+        } elseif (Test-Path -Path $Package.pathCheck) {
+            $resolvedPaths = @($Package.pathCheck)
         }
 
-        $wId = $Package.wingetId
-        $cached = $null
-
-        if ($global:WingetCache.ContainsKey($wId)) {
-            $cached = $global:WingetCache[$wId]
-        } elseif ($global:WingetCache.ContainsKey($wId.ToLower())) {
-            $cached = $global:WingetCache[$wId.ToLower()]
-        }
-
-        if ($cached) {
-            $result.InstalledVersion = $cached.Installed
-            if (-not [string]::IsNullOrWhiteSpace($cached.Available) -and $cached.Available -ne $cached.Installed) {
-                $result.Status = "UPDATE_AVAILABLE"
-                $result.TargetVersion = $cached.Available
-                $result.Details = "Versi lama terpasang ($($cached.Installed)), tersedia pembaruan ($($cached.Available))."
-            } else {
-                $result.Status = "UP_TO_DATE"
-                $result.TargetVersion = $cached.Installed
-                $result.Details = "Sudah terpasang dan sesuai dengan versi rilis stabil."
-            }
-        } else {
-            $result.Status = "NOT_INSTALLED"
-            $result.Details = "Belum terpasang di sistem operasi."
+        if ($resolvedPaths.Count -gt 0) {
+            $targetPath = $resolvedPaths[0]
+            $fileVer = (Get-Item $targetPath -ErrorAction SilentlyContinue).VersionInfo.ProductVersion
+            $result.InstalledVersion = if ($fileVer) { $fileVer } else { "Terpasang" }
+            $result.TargetVersion = $result.InstalledVersion
+            $result.Status = "UP_TO_DATE"
+            $result.Details = "Terdeteksi pada berkas: $targetPath"
+            return $result
         }
     }
-    elseif ($Package.type -eq "custom") {
-        # Deteksi khusus untuk tool khusus
-        switch ($Package.id) {
-            "Custom.Laragon" {
-                $laragonExe = "C:\laragon\laragon.exe"
-                if (Test-Path -Path $laragonExe) {
-                    $ver = (Get-Item $laragonExe).VersionInfo.ProductVersion
-                    $result.InstalledVersion = if ($ver) { $ver } else { "6.0.0" }
-                    $result.TargetVersion = "6.0.0"
-                    $result.Status = "UP_TO_DATE"
-                    $result.Details = "Laragon terpasang di C:\laragon (v$($result.InstalledVersion))."
-                } else {
-                    $result.Status = "NOT_INSTALLED"
-                    $result.TargetVersion = "6.0.0"
-                    $result.Details = "Laragon belum terpasang di C:\laragon."
-                }
-            }
-            Default {
-                $cmdName = $Package.verifyCommand
-                $foundCmd = Get-Command $cmdName -ErrorAction SilentlyContinue
 
-                if (-not $foundCmd) {
-                    $fallbackPath = Get-CustomCommandFallbackPath -CommandName $cmdName
-                    if ($fallbackPath -and (Test-Path -Path $fallbackPath)) {
-                        $foundCmd = [PSCustomObject]@{ Source = $fallbackPath }
-                    }
-                }
+    # 2. Jalur Pemeriksaan 2: CLI Command di PATH (verifyCommand)
+    if (-not [string]::IsNullOrWhiteSpace($Package.verifyCommand)) {
+        $cmdName = $Package.verifyCommand
+        $foundCmd = Get-Command $cmdName -ErrorAction SilentlyContinue
 
-                if (-not $foundCmd) {
-                    $result.Status = "NOT_INSTALLED"
-                    $result.Details = "Tool '$cmdName' belum terdeteksi di PATH sistem."
-                } else {
-                    $versionString = Get-CommandVersionOutput -CommandPath $foundCmd.Source -VerifyArgs $Package.verifyArgs
-                    $result.InstalledVersion = if ($versionString) { $versionString } else { "Terpasang" }
-                    $result.TargetVersion = $result.InstalledVersion
-                    $result.Status = "UP_TO_DATE"
-                    $result.Details = "Sudah terpasang di $($foundCmd.Source)."
-                }
+        if (-not $foundCmd) {
+            $fallbackPath = Get-CustomCommandFallbackPath -CommandName $cmdName
+            if ($fallbackPath -and (Test-Path -Path $fallbackPath)) {
+                $foundCmd = [PSCustomObject]@{ Source = $fallbackPath }
             }
         }
+
+        if ($foundCmd) {
+            $vOutput = Get-CommandVersionOutput -CommandPath $foundCmd.Source -VerifyArgs $Package.verifyArgs
+            $result.InstalledVersion = if ($vOutput) { $vOutput } else { "CLI Terdeteksi" }
+            $result.TargetVersion = $result.InstalledVersion
+            $result.Status = "UP_TO_DATE"
+            $result.Details = "Terdeteksi via perintah CLI ($($foundCmd.Source))."
+            return $result
+        }
     }
+
+    # 3. Jalur Pemeriksaan 3: Windows Registry Uninstall Keys (registryPattern)
+    $pattern = if ($Package.registryPattern) { $Package.registryPattern } else { [regex]::Escape($Package.name) }
+    
+    $match = $global:RegistryAppCache | Where-Object { $_.DisplayName -match $pattern } | Select-Object -First 1
+    if ($match) {
+        $result.InstalledVersion = $match.DisplayVersion
+        $result.TargetVersion = $match.DisplayVersion
+        $result.Status = "UP_TO_DATE"
+        $result.Details = "Terdaftar di Registry Windows: $($match.DisplayName)"
+        return $result
+    }
+
+    # Jika tidak terdeteksi pada ketiga jalur di atas, maka paket belum terpasang
+    $result.Status = "NOT_INSTALLED"
+    $result.InstalledVersion = "-"
+    $result.TargetVersion = "Terbaru"
+    $result.Details = "Software belum ditemukan di Registry atau sistem PATH."
 
     return $result
 }
@@ -200,7 +167,7 @@ function Get-CommandVersionOutput {
         $p.Start() | Out-Null
         $stdout = $p.StandardOutput.ReadToEnd()
         $stderr = $p.StandardError.ReadToEnd()
-        $p.WaitForExit(3000)
+        [void]$p.WaitForExit(2000)
 
         $output = if (-not [string]::IsNullOrWhiteSpace($stdout)) { $stdout } else { $stderr }
         $firstLine = ($output -split '\r?\n' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)

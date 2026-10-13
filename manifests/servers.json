@@ -5,9 +5,9 @@
     "category": "Web Server Environment",
     "type": "custom",
     "priority": 9,
+    "registryPattern": "Laragon",
+    "pathCheck": "C:\\laragon\\laragon.exe",
     "customHandler": "Install-LaragonOfficial",
-    "verifyCommand": "laragon",
-    "verifyArgs": [],
     "postInstallHandler": "Setup-LaragonEnvironment",
     "description": "Lingkungan pengembangan lokal cepat & portabel untuk PHP, Apache, MySQL (Versi 6.0.0 Resmi)."
   },
@@ -18,6 +18,8 @@
     "type": "winget",
     "priority": 10,
     "wingetId": "ApacheFriends.Xampp.8.2",
+    "registryPattern": "XAMPP",
+    "pathCheck": "C:\\xampp\\xampp-control.exe",
     "postInstallHandler": "Setup-XamppEnvironment",
     "description": "Distribusi Apache, MariaDB, PHP, dan Perl dari Apache Friends (Port otomatis disesuaikan agar tidak bentrok dengan Laragon)."
   }

@@ -5,9 +5,10 @@
     "category": "PHP Tooling",
     "type": "custom",
     "priority": 6,
-    "customHandler": "Install-ComposerOfficial",
     "verifyCommand": "composer",
     "verifyArgs": ["--version"],
+    "pathCheck": "C:\\ProgramData\\ComposerSetup\\bin\\composer.bat",
+    "customHandler": "Install-ComposerOfficial",
     "description": "Manajer dependensi resmi untuk ekosistem PHP dan framework Laravel."
   },
   {
@@ -16,9 +17,9 @@
     "category": "PHP Framework Tool",
     "type": "custom",
     "priority": 7,
-    "customHandler": "Install-LaravelInstallerOfficial",
     "verifyCommand": "laravel",
     "verifyArgs": ["--version"],
+    "customHandler": "Install-LaravelInstallerOfficial",
     "description": "CLI resmi untuk membuat proyek Laravel (laravel new example-app)."
   },
   {
@@ -27,9 +28,10 @@
     "category": "Mobile & Multi-platform SDK",
     "type": "custom",
     "priority": 8,
-    "customHandler": "Install-FlutterSdkOfficial",
     "verifyCommand": "flutter",
     "verifyArgs": ["--version"],
+    "pathCheck": "C:\\tools\\flutter\\bin\\flutter.bat",
+    "customHandler": "Install-FlutterSdkOfficial",
     "description": "SDK UI resmi dari Google untuk membangun aplikasi Android, iOS, Web, dan Desktop."
   }
 ]

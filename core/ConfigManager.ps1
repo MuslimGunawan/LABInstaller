@@ -192,3 +192,4 @@ function Configure-LaravelEcosystem {
     Write-Host "  4. composer run dev" -ForegroundColor White
     Write-Host ""
 }
+
