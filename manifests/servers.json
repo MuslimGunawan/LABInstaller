@@ -1,0 +1,24 @@
+[
+  {
+    "id": "Custom.Laragon",
+    "name": "Laragon WAMP 6.0.0",
+    "category": "Web Server Environment",
+    "type": "custom",
+    "priority": 9,
+    "customHandler": "Install-LaragonOfficial",
+    "verifyCommand": "laragon",
+    "verifyArgs": [],
+    "postInstallHandler": "Setup-LaragonEnvironment",
+    "description": "Lingkungan pengembangan lokal cepat & portabel untuk PHP, Apache, MySQL (Versi 6.0.0 Resmi)."
+  },
+  {
+    "id": "ApacheFriends.Xampp.8.2",
+    "name": "XAMPP 8.2",
+    "category": "Web Server Environment",
+    "type": "winget",
+    "priority": 10,
+    "wingetId": "ApacheFriends.Xampp.8.2",
+    "postInstallHandler": "Setup-XamppEnvironment",
+    "description": "Distribusi Apache, MariaDB, PHP, dan Perl dari Apache Friends (Port otomatis disesuaikan agar tidak bentrok dengan Laragon)."
+  }
+]

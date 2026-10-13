@@ -29,20 +29,25 @@ Sistem otomasi berbasis PowerShell dan Windows Package Manager (`winget`) untuk 
 
 ---
 
-## 📦 Daftar Software & Environment Bawaan
+## 📦 Daftar Software & Environment Bawaan (Urutan Prioritas Dependensi)
 
-| Kategori | Nama Software | Pengenal / Metode |
-| :--- | :--- | :--- |
-| **Aplikasi GUI** | Google Chrome | `Google.Chrome` (Winget) |
-| **Aplikasi GUI** | Visual Studio Code | `Microsoft.VisualStudioCode` (Winget) |
-| **Aplikasi GUI** | Oracle VirtualBox | `Oracle.VirtualBox` (Winget) |
-| **Aplikasi GUI** | Git for Windows | `Git.Git` (Winget) |
-| **Runtime** | Python 3.12 | `Python.Python.3.12` + Auto PATH |
-| **Runtime** | Java Temurin JDK 21 LTS | `EclipseAdoptium.Temurin.21.JDK` + `JAVA_HOME` |
-| **Runtime** | PHP 8.3 | `PHP.PHP.8.3` + Auto `php.ini` & PATH |
-| **Tooling** | Composer | `Composer-Setup.exe` Resmi + Auto PATH |
-| **Tooling** | Laravel Installer | `composer global require laravel/installer` |
-| **Tooling** | Flutter SDK (Stable) | Git Official Repo + Auto PATH & Upgrade |
+| Prioritas | Kategori | Nama Software | Pengenal / Metode |
+| :---: | :--- | :--- | :--- |
+| **P1** | **Version Control** | Git for Windows | `Git.Git` (Winget) |
+| **P2** | **SDK & Runtime** | Java Temurin OpenJDK 21 LTS | `EclipseAdoptium.Temurin.21.JDK` + `JAVA_HOME` |
+| **P3** | **Runtime** | Python 3.12 | `Python.Python.3.12` + Auto PATH |
+| **P4** | **Runtime** | Node.js (LTS) | `OpenJS.NodeJS.LTS` (Vite, NPM) |
+| **P5** | **Backend Runtime** | PHP 8.5 | `PHP.PHP.8.5` (Resmi Thread-Safe) |
+| **P6** | **Tooling** | Composer | `Composer-Setup.exe` Resmi + Auto PATH |
+| **P7** | **Framework Tool** | Laravel Installer CLI | `composer global require laravel/installer` |
+| **P8** | **SDK** | Flutter SDK (Stable) | Git Official Repo + Auto PATH |
+| **P9** | **Web Server** | Laragon WAMP 6.0.0 | Release Resmi GitHub (Apache: 80, MySQL: 3306) |
+| **P10** | **Web Server** | XAMPP 8.2 | `ApacheFriends.Xampp.8.2` (Auto Port 8080 & 3307) |
+| **P11** | **IDE & Editor** | Visual Studio Code | `Microsoft.VisualStudioCode` (Winget) |
+| **P12** | **IDE & Editor** | Apache NetBeans IDE | `Apache.NetBeans` (Winget) |
+| **P13** | **Embedded IDE** | Arduino IDE | `ArduinoSA.IDE.stable` (Winget) |
+| **P14** | **Browser** | Google Chrome | `Google.Chrome` (Winget) |
+| **P15** | **Virtualization** | Oracle VirtualBox | `Oracle.VirtualBox` (Winget) |
 
 ---
 

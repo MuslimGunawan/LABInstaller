@@ -1,9 +1,10 @@
 <#
 .SYNOPSIS
-    LABInstaller - Sistem Instalasi Pintar & Otomatis untuk Windows
+    LABInstaller - Sistem Instalasi Pintar & Otomatis untuk Windows (v1.0.1)
 .DESCRIPTION
     Menginstal aplikasi resmi (Chrome, VSCode, VirtualBox, Git, Python, Java JDK,
-    PHP, Composer, Laravel, Flutter) dan mengelola pembaruan sistem secara otomatis via GitHub.
+    PHP 8.5, Composer, Laravel, Flutter, Laragon 6.0.0, XAMPP, NetBeans, Arduino IDE)
+    serta konfigurasi port & verifikasi integritas file ganda.
 .AUTHOR
     MuslimGunawan
 #>
@@ -47,6 +48,7 @@ if ([string]::IsNullOrWhiteSpace($ScriptRoot)) {
 . (Join-Path -Path $ScriptRoot -ChildPath "core\Environment.ps1")
 . (Join-Path -Path $ScriptRoot -ChildPath "core\Detector.ps1")
 . (Join-Path -Path $ScriptRoot -ChildPath "core\WingetEngine.ps1")
+. (Join-Path -Path $ScriptRoot -ChildPath "core\ConfigManager.ps1")
 . (Join-Path -Path $ScriptRoot -ChildPath "core\PostInstaller.ps1")
 . (Join-Path -Path $ScriptRoot -ChildPath "core\Updater.ps1")
 . (Join-Path -Path $ScriptRoot -ChildPath "ui\Menu.ps1")
@@ -101,21 +103,21 @@ if ($config -and $config.system.checkUpdateOnStartup) {
 # 6. Loop Menu Interaktif
 # ------------------------------------------------------------------------------
 while ($true) {
-    # Ambil ulang info versi jika baru saja diupdate
     $versionInfo = Get-LocalVersionInfo
     $currentVersion = $versionInfo.version
 
     Show-LabBanner -Version $currentVersion
 
     Write-Host "  PILIHAN MENU UTAMA:" -ForegroundColor Yellow
-    Write-Host "  [1] Mulai Instalasi Pintar (Auto Scan, Install & Update)" -ForegroundColor Green
-    Write-Host "  [2] Pindai & Cek Status Software Saja (Scan Only)" -ForegroundColor Cyan
-    Write-Host "  [3] Periksa Pembaruan LABInstaller dari GitHub" -ForegroundColor Magenta
-    Write-Host "  [4] Buka Folder Log Aktivitas" -ForegroundColor White
+    Write-Host "  [1] Mulai Instalasi Pintar (Auto Scan, Install & Auto Config)" -ForegroundColor Green
+    Write-Host "  [2] Pindai Cepat Status Software Saja (Fast Scan)" -ForegroundColor Cyan
+    Write-Host "  [3] Konfigurasi Port & Environment (Laragon vs XAMPP, php.ini, Laravel)" -ForegroundColor Yellow
+    Write-Host "  [4] Periksa Pembaruan Sistem & Double Verification (GitHub)" -ForegroundColor Magenta
+    Write-Host "  [5] Buka Folder Log Aktivitas" -ForegroundColor White
     Write-Host "  [0] Keluar" -ForegroundColor DarkGray
     Write-Host ""
 
-    $pilihan = Read-Host "Masukkan pilihan Anda (0-4)"
+    $pilihan = Read-Host "Masukkan pilihan Anda (0-5)"
 
     switch ($pilihan) {
         "1" {
@@ -125,13 +127,19 @@ while ($true) {
             Show-SystemScanOnly -ScriptRootDirectory $ScriptRoot
         }
         "3" {
+            Start-FullEnvironmentConfiguration
+            Write-Host ""
+            Write-Host "Tekan Enter untuk kembali ke menu..." -ForegroundColor Gray
+            [void][System.Console]::ReadLine()
+        }
+        "4" {
             $needRestart = Show-UpdateMenuDialog -ScriptRootDirectory $ScriptRoot -Config $config
             if ($needRestart) {
                 Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
                 exit
             }
         }
-        "4" {
+        "5" {
             $logDir = Join-Path -Path $ScriptRoot -ChildPath "logs"
             if (Test-Path -Path $logDir) {
                 Start-Process -FilePath "explorer.exe" -ArgumentList "`"$logDir`""
@@ -145,9 +153,8 @@ while ($true) {
             exit
         }
         Default {
-            Write-LogWarning "Pilihan '$pilihan' tidak valid. Silakan pilih 0 - 4."
+            Write-LogWarning "Pilihan '$pilihan' tidak valid. Silakan pilih 0 - 5."
             Start-Sleep -Seconds 1
         }
     }
 }
-

@@ -1,9 +1,33 @@
 [
   {
+    "id": "Git.Git",
+    "name": "Git for Windows",
+    "category": "Version Control",
+    "type": "winget",
+    "priority": 1,
+    "wingetId": "Git.Git",
+    "verifyCommand": "git",
+    "verifyArgs": ["--version"],
+    "description": "Sistem kontrol versi resmi terdistribusi untuk melacak perubahan kode sumber."
+  },
+  {
+    "id": "EclipseAdoptium.Temurin.21.JDK",
+    "name": "Java SDK (Temurin OpenJDK 21 LTS)",
+    "category": "SDK & Runtime",
+    "type": "winget",
+    "priority": 2,
+    "wingetId": "EclipseAdoptium.Temurin.21.JDK",
+    "verifyCommand": "java",
+    "verifyArgs": ["-version"],
+    "postInstallHandler": "Setup-JavaEnvironment",
+    "description": "Java Development Kit (JDK) resmi dengan dukungan LTS. Wajib untuk NetBeans & Android/Flutter."
+  },
+  {
     "id": "Python.Python.3.12",
     "name": "Python 3.12",
     "category": "Programming Runtime",
     "type": "winget",
+    "priority": 3,
     "wingetId": "Python.Python.3.12",
     "installOverride": "/passive InstallAllUsers=1 PrependPath=1",
     "verifyCommand": "python",
@@ -12,26 +36,26 @@
     "description": "Bahasa pemrograman tingkat tinggi untuk AI, scripting, dan backend development."
   },
   {
-    "id": "EclipseAdoptium.Temurin.21.JDK",
-    "name": "Java SDK (Temurin OpenJDK 21 LTS)",
-    "category": "SDK & Runtime",
+    "id": "OpenJS.NodeJS.LTS",
+    "name": "Node.js (LTS)",
+    "category": "Frontend & JS Runtime",
     "type": "winget",
-    "wingetId": "EclipseAdoptium.Temurin.21.JDK",
-    "verifyCommand": "java",
-    "verifyArgs": ["-version"],
-    "postInstallHandler": "Setup-JavaEnvironment",
-    "description": "Java Development Kit (JDK) resmi dari Eclipse Foundation dengan dukungan LTS."
+    "priority": 4,
+    "wingetId": "OpenJS.NodeJS.LTS",
+    "verifyCommand": "node",
+    "verifyArgs": ["-v"],
+    "description": "JavaScript runtime resmi untuk Vite, NPM, dan kompilasi frontend modern Laravel."
   },
   {
-    "id": "PHP.PHP.8.3",
-    "name": "PHP 8.3",
+    "id": "PHP.PHP.8.5",
+    "name": "PHP 8.5",
     "category": "Backend Runtime",
     "type": "winget",
-    "wingetId": "PHP.PHP.8.3",
+    "priority": 5,
+    "wingetId": "PHP.PHP.8.5",
     "verifyCommand": "php",
     "verifyArgs": ["-v"],
     "postInstallHandler": "Setup-PhpEnvironment",
-    "description": "Interpreter bahasa PHP untuk web development modern dan framework seperti Laravel."
+    "description": "PHP 8.5 versi resmi thread-safe untuk kebutuhan web development modern dan Laravel."
   }
 ]
-

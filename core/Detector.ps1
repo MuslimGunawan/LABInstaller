@@ -1,7 +1,63 @@
 # ==============================================================================
-# LABInstaller - Core Detector
-# Mendeteksi status paket secara cerdas: Belum Terpasang / Butuh Update / Up-to-date
+# LABInstaller - Core Detector (High-Performance Engine)
+# Mendeteksi status paket secara instan dengan caching Winget in-memory
 # ==============================================================================
+
+$global:WingetCache = $null
+
+function Initialize-WingetCache {
+    param([switch]$ForceRefresh)
+
+    if ($global:WingetCache -and -not $ForceRefresh) {
+        return $global:WingetCache
+    }
+
+    $global:WingetCache = @{}
+    Write-LogInfo "Memuat basis data paket terpasang Windows (Caching)..."
+
+    try {
+        $rawList = winget list 2>&1
+        $headerIndex = -1
+
+        for ($i = 0; $i -lt $rawList.Count; $i++) {
+            if ($rawList[$i] -match "---") {
+                $headerIndex = $i
+                break
+            }
+        }
+
+        if ($headerIndex -ge 0) {
+            for ($j = $headerIndex + 1; $j -lt $rawList.Count; $j++) {
+                $line = $rawList[$j].Trim()
+                if ([string]::IsNullOrWhiteSpace($line)) { continue }
+
+                # Split berdasarkan multiple whitespace
+                $tokens = $line -split '\s{2,}' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+                if ($tokens.Count -ge 3) {
+                    $pkgName = $tokens[0].Trim()
+                    $pkgId   = $tokens[1].Trim()
+                    $pkgVer  = $tokens[2].Trim()
+                    $pkgAvail = if ($tokens.Count -ge 4) { $tokens[3].Trim() } else { $null }
+
+                    $item = @{
+                        Name      = $pkgName
+                        Installed = $pkgVer
+                        Available = $pkgAvail
+                    }
+
+                    $global:WingetCache[$pkgId] = $item
+                    # Simpan juga dengan key lowercase untuk pencarian toleran
+                    $global:WingetCache[$pkgId.ToLower()] = $item
+                }
+            }
+        }
+    }
+    catch {
+        Write-LogWarning "Gagal memuat cache Winget: $_"
+    }
+
+    return $global:WingetCache
+}
 
 function Get-PackageStatus {
     param (
@@ -14,166 +70,88 @@ function Get-PackageStatus {
         Name             = $Package.name
         Category         = $Package.category
         Type             = $Package.type
+        Priority         = if ($Package.priority) { [int]$Package.priority } else { 99 }
         Status           = "UNKNOWN" # NOT_INSTALLED, UPDATE_AVAILABLE, UP_TO_DATE
         InstalledVersion = "-"
-        TargetVersion    = "-"
+        TargetVersion    = "Terbaru"
         Details          = ""
         RawPackage       = $Package
     }
 
     if ($Package.type -eq "winget") {
-        # Deteksi via Winget
-        $wingetId = $Package.wingetId
-        $listOutput = winget list --exact --id $wingetId 2>&1
-
-        $isInstalled = $true
-        foreach ($line in $listOutput) {
-            if ($line -match "No installed package found" -or $line -match "Tidak ada paket yang terinstal") {
-                $isInstalled = $false
-                break
-            }
+        # Pastikan cache winget sudah aktif
+        if (-not $global:WingetCache) {
+            Initialize-WingetCache | Out-Null
         }
 
-        if (-not $isInstalled) {
-            $result.Status = "NOT_INSTALLED"
-            # Coba cari versi target di repo winget
-            $searchOutput = winget search --exact --id $wingetId 2>&1
-            $parsedTarget = Parse-WingetSearchVersion -OutputLines $searchOutput -PackageId $wingetId
-            if ($parsedTarget) {
-                $result.TargetVersion = $parsedTarget
-            }
-            $result.Details = "Belum terpasang di sistem operasi."
-        }
-        else {
-            # Terpasang, ekstrak versi dan cek apakah ada pembaruan
-            $parsedInfo = Parse-WingetListInfo -OutputLines $listOutput -PackageId $wingetId
-            if ($parsedInfo.InstalledVersion) {
-                $result.InstalledVersion = $parsedInfo.InstalledVersion
-            }
+        $wId = $Package.wingetId
+        $cached = $null
 
-            if ($parsedInfo.AvailableVersion -and $parsedInfo.AvailableVersion -ne $parsedInfo.InstalledVersion) {
+        if ($global:WingetCache.ContainsKey($wId)) {
+            $cached = $global:WingetCache[$wId]
+        } elseif ($global:WingetCache.ContainsKey($wId.ToLower())) {
+            $cached = $global:WingetCache[$wId.ToLower()]
+        }
+
+        if ($cached) {
+            $result.InstalledVersion = $cached.Installed
+            if (-not [string]::IsNullOrWhiteSpace($cached.Available) -and $cached.Available -ne $cached.Installed) {
                 $result.Status = "UPDATE_AVAILABLE"
-                $result.TargetVersion = $parsedInfo.AvailableVersion
-                $result.Details = "Versi lama terpasang ($($result.InstalledVersion)), tersedia versi baru ($($result.TargetVersion))."
-            }
-            else {
+                $result.TargetVersion = $cached.Available
+                $result.Details = "Versi lama terpasang ($($cached.Installed)), tersedia pembaruan ($($cached.Available))."
+            } else {
                 $result.Status = "UP_TO_DATE"
-                $result.TargetVersion = $result.InstalledVersion
-                $result.Details = "Sudah terpasang dan berada pada versi terbaru."
+                $result.TargetVersion = $cached.Installed
+                $result.Details = "Sudah terpasang dan sesuai dengan versi rilis stabil."
             }
+        } else {
+            $result.Status = "NOT_INSTALLED"
+            $result.Details = "Belum terpasang di sistem operasi."
         }
     }
     elseif ($Package.type -eq "custom") {
-        # Deteksi untuk paket khusus seperti Flutter, Composer, Laravel
-        $cmdName = $Package.verifyCommand
-        $foundCmd = Get-Command $cmdName -ErrorAction SilentlyContinue
-
-        if (-not $foundCmd) {
-            # Coba cek path khusus jika belum masuk di PATH sesi
-            $fallbackPath = Get-CustomCommandFallbackPath -CommandName $cmdName
-            if ($fallbackPath -and (Test-Path -Path $fallbackPath)) {
-                $foundCmd = [PSCustomObject]@{ Source = $fallbackPath }
+        # Deteksi khusus untuk tool khusus
+        switch ($Package.id) {
+            "Custom.Laragon" {
+                $laragonExe = "C:\laragon\laragon.exe"
+                if (Test-Path -Path $laragonExe) {
+                    $ver = (Get-Item $laragonExe).VersionInfo.ProductVersion
+                    $result.InstalledVersion = if ($ver) { $ver } else { "6.0.0" }
+                    $result.TargetVersion = "6.0.0"
+                    $result.Status = "UP_TO_DATE"
+                    $result.Details = "Laragon terpasang di C:\laragon (v$($result.InstalledVersion))."
+                } else {
+                    $result.Status = "NOT_INSTALLED"
+                    $result.TargetVersion = "6.0.0"
+                    $result.Details = "Laragon belum terpasang di C:\laragon."
+                }
             }
-        }
+            Default {
+                $cmdName = $Package.verifyCommand
+                $foundCmd = Get-Command $cmdName -ErrorAction SilentlyContinue
 
-        if (-not $foundCmd) {
-            $result.Status = "NOT_INSTALLED"
-            $result.Details = "CLI/Tools '$cmdName' belum terdeteksi di sistem."
-        }
-        else {
-            $versionString = Get-CommandVersionOutput -CommandPath $foundCmd.Source -VerifyArgs $Package.verifyArgs
-            $result.InstalledVersion = if ($versionString) { $versionString } else { "Terpasang" }
-            $result.TargetVersion = $result.InstalledVersion
-            $result.Status = "UP_TO_DATE"
-            $result.Details = "Sudah terpasang di $($foundCmd.Source)."
+                if (-not $foundCmd) {
+                    $fallbackPath = Get-CustomCommandFallbackPath -CommandName $cmdName
+                    if ($fallbackPath -and (Test-Path -Path $fallbackPath)) {
+                        $foundCmd = [PSCustomObject]@{ Source = $fallbackPath }
+                    }
+                }
+
+                if (-not $foundCmd) {
+                    $result.Status = "NOT_INSTALLED"
+                    $result.Details = "Tool '$cmdName' belum terdeteksi di PATH sistem."
+                } else {
+                    $versionString = Get-CommandVersionOutput -CommandPath $foundCmd.Source -VerifyArgs $Package.verifyArgs
+                    $result.InstalledVersion = if ($versionString) { $versionString } else { "Terpasang" }
+                    $result.TargetVersion = $result.InstalledVersion
+                    $result.Status = "UP_TO_DATE"
+                    $result.Details = "Sudah terpasang di $($foundCmd.Source)."
+                }
+            }
         }
     }
 
     return $result
-}
-
-function Parse-WingetListInfo {
-    param (
-        [string[]]$OutputLines,
-        [string]$PackageId
-    )
-
-    $installedVer = $null
-    $availableVer = $null
-
-    $headerIndex = -1
-    for ($i = 0; $i -lt $OutputLines.Count; $i++) {
-        if ($OutputLines[$i] -match "---") {
-            $headerIndex = $i
-            break
-        }
-    }
-
-    if ($headerIndex -ge 0 -and ($headerIndex + 1) -lt $OutputLines.Count) {
-        $header = $OutputLines[$headerIndex - 1]
-        $hasAvailableCol = $header -match "Available"
-
-        for ($j = $headerIndex + 1; $j -lt $OutputLines.Count; $j++) {
-            $line = $OutputLines[$j].Trim()
-            if ([string]::IsNullOrWhiteSpace($line)) { continue }
-
-            if ($line -match [regex]::Escape($PackageId)) {
-                $tokens = $line -split '\s+' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-                # Pola umum: [Name...], Id, Version, [Available]
-                $idIndex = -1
-                for ($k = 0; $k -lt $tokens.Count; $k++) {
-                    if ($tokens[$k] -eq $PackageId) {
-                        $idIndex = $k
-                        break
-                    }
-                }
-
-                if ($idIndex -ge 0 -and ($idIndex + 1) -lt $tokens.Count) {
-                    $installedVer = $tokens[$idIndex + 1]
-                    if ($hasAvailableCol -and ($idIndex + 2) -lt $tokens.Count) {
-                        $availableVer = $tokens[$idIndex + 2]
-                    }
-                }
-                break
-            }
-        }
-    }
-
-    return [PSCustomObject]@{
-        InstalledVersion = $installedVer
-        AvailableVersion = $availableVer
-    }
-}
-
-function Parse-WingetSearchVersion {
-    param (
-        [string[]]$OutputLines,
-        [string]$PackageId
-    )
-
-    $headerIndex = -1
-    for ($i = 0; $i -lt $OutputLines.Count; $i++) {
-        if ($OutputLines[$i] -match "---") {
-            $headerIndex = $i
-            break
-        }
-    }
-
-    if ($headerIndex -ge 0 -and ($headerIndex + 1) -lt $OutputLines.Count) {
-        for ($j = $headerIndex + 1; $j -lt $OutputLines.Count; $j++) {
-            $line = $OutputLines[$j].Trim()
-            if ($line -match [regex]::Escape($PackageId)) {
-                $tokens = $line -split '\s+' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-                for ($k = 0; $k -lt $tokens.Count; $k++) {
-                    if ($tokens[$k] -eq $PackageId -and ($k + 1) -lt $tokens.Count) {
-                        return $tokens[$k + 1]
-                    }
-                }
-            }
-        }
-    }
-
-    return $null
 }
 
 function Get-CustomCommandFallbackPath {
@@ -222,13 +200,12 @@ function Get-CommandVersionOutput {
         $p.Start() | Out-Null
         $stdout = $p.StandardOutput.ReadToEnd()
         $stderr = $p.StandardError.ReadToEnd()
-        $p.WaitForExit(4000)
+        $p.WaitForExit(3000)
 
         $output = if (-not [string]::IsNullOrWhiteSpace($stdout)) { $stdout } else { $stderr }
         $firstLine = ($output -split '\r?\n' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
 
         if ($firstLine) {
-            # Ambil pola angka versi jika memungkinkan (misal: "1.2.3")
             if ($firstLine -match '(\d+\.\d+(\.\d+)?)') {
                 return $matches[1]
             }
@@ -258,10 +235,11 @@ function Load-AllManifestPackages {
             }
         }
         catch {
-            Write-LogError "Gagal membaca manifest file '$($file.Name)': $_"
+            Write-LogError "Gagal membaca manifest file '$($file.Name)' - $_"
         }
     }
 
-    return $allPackages
+    # Urutkan berdasarkan prioritas instalasi (Dependency ordering)
+    $sortedPackages = $allPackages | Sort-Object @{Expression={if ($_.priority) { [int]$_.priority } else { 99 }}}
+    return $sortedPackages
 }
-

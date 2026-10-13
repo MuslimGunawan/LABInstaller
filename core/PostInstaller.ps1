@@ -1,13 +1,12 @@
 # ==============================================================================
 # LABInstaller - Core PostInstaller & Custom Tooling Handlers
-# Logika khusus untuk Java (JAVA_HOME), Python, PHP, Composer, Laravel, Flutter SDK
+# Logika khusus untuk Java (JAVA_HOME), Python, PHP, Composer, Laravel, Flutter, Laragon, XAMPP
 # ==============================================================================
 
 function Setup-PythonEnvironment {
     Write-LogStep "Mengonfigurasi environment Python..."
     Refresh-CurrentSessionEnvironment
 
-    # Cari instalasi Python
     $pythonCmd = Get-Command "python.exe" -ErrorAction SilentlyContinue
     if ($pythonCmd) {
         $pythonDir = Split-Path -Parent $pythonCmd.Source
@@ -25,7 +24,6 @@ function Setup-JavaEnvironment {
     Write-LogStep "Mengonfigurasi JAVA_HOME dan PATH untuk Java SDK..."
     Refresh-CurrentSessionEnvironment
 
-    # Deteksi folder JDK di Program Files
     $jdkCandidates = @()
     $searchRoots = @(
         "C:\Program Files\Eclipse Adoptium",
@@ -46,7 +44,6 @@ function Setup-JavaEnvironment {
     if ($jdkCandidates.Count -gt 0) {
         $selectedJdk = $jdkCandidates[0]
     } else {
-        # Fallback via Get-Command java
         $javaCmd = Get-Command "java.exe" -ErrorAction SilentlyContinue
         if ($javaCmd) {
             $binDir = Split-Path -Parent $javaCmd.Source
@@ -65,7 +62,7 @@ function Setup-JavaEnvironment {
 }
 
 function Setup-PhpEnvironment {
-    Write-LogStep "Mengonfigurasi environment PHP & php.ini..."
+    Write-LogStep "Mengonfigurasi environment PHP 8.5 & php.ini..."
     Refresh-CurrentSessionEnvironment
 
     $phpCmd = Get-Command "php.exe" -ErrorAction SilentlyContinue
@@ -74,7 +71,6 @@ function Setup-PhpEnvironment {
     if ($phpCmd) {
         $phpDir = Split-Path -Parent $phpCmd.Source
     } else {
-        # Coba cari lokasi winget portable package untuk PHP
         $wingetPackagesRoot = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages"
         if (Test-Path -Path $wingetPackagesRoot) {
             $phpCandidate = Get-ChildItem -Path $wingetPackagesRoot -Recurse -Filter "php.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -86,7 +82,6 @@ function Setup-PhpEnvironment {
     }
 
     if ($phpDir) {
-        # Pastikan php.ini ada dan ekstensi dasar aktif
         $iniPath = Join-Path -Path $phpDir -ChildPath "php.ini"
         $iniDevPath = Join-Path -Path $phpDir -ChildPath "php.ini-development"
         $iniProdPath = Join-Path -Path $phpDir -ChildPath "php.ini-production"
@@ -96,19 +91,13 @@ function Setup-PhpEnvironment {
             if ($srcIni) {
                 Copy-Item -Path $srcIni -Destination $iniPath -Force
                 Write-LogInfo "Membuat php.ini dari $($srcIni | Split-Path -Leaf)..."
-                
-                # Mengaktifkan ekstensi penting: curl, mbstring, openssl, pdo_mysql, fileinfo
-                $content = Get-Content -Path $iniPath -Raw
-                $content = $content -replace ';extension=curl', 'extension=curl'
-                $content = $content -replace ';extension=mbstring', 'extension=mbstring'
-                $content = $content -replace ';extension=openssl', 'extension=openssl'
-                $content = $content -replace ';extension=pdo_mysql', 'extension=pdo_mysql'
-                $content = $content -replace ';extension=fileinfo', 'extension=fileinfo'
-                Set-Content -Path $iniPath -Value $content -Encoding UTF8
-                Write-LogSuccess "Ekstensi penting (curl, mbstring, openssl, pdo_mysql, fileinfo) telah diaktifkan di php.ini."
             }
         }
-        Write-LogSuccess "PHP berhasil dikonfigurasi di: $phpDir"
+    }
+
+    # Jalankan konfigurasi ekstensi lengkap
+    if (Get-Command Configure-AllPhpExtensions -ErrorAction SilentlyContinue) {
+        Configure-AllPhpExtensions
     }
 }
 
@@ -130,7 +119,6 @@ function Install-ComposerOfficial {
 
         if ($process.ExitCode -eq 0) {
             Write-LogSuccess "Composer berhasil diinstal secara resmi."
-            # Daftarkan direktori Composer ke PATH
             $composerBin = "C:\ProgramData\ComposerSetup\bin"
             if (Test-Path -Path $composerBin) {
                 Add-DirectoryToPath -PathToAdd $composerBin -Scope "Machine" | Out-Null
@@ -143,7 +131,7 @@ function Install-ComposerOfficial {
         }
     }
     catch {
-        Write-LogError "Gagal menginstal Composer: $_"
+        Write-LogError "Gagal menginstal Composer - $_"
         return $false
     }
     finally {
@@ -154,7 +142,7 @@ function Install-ComposerOfficial {
 }
 
 function Install-LaravelInstallerOfficial {
-    Write-LogStep "Menginstal Laravel Installer resmi via Composer Global..."
+    Write-LogStep "Menginstal Laravel Installer CLI via Composer Global..."
     Refresh-CurrentSessionEnvironment
 
     $composerCmd = Get-Command "composer" -ErrorAction SilentlyContinue
@@ -167,18 +155,17 @@ function Install-LaravelInstallerOfficial {
         Write-LogInfo "Menjalankan: composer global require laravel/installer"
         $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c composer global require laravel/installer" -NoNewWindow -Wait -PassThru
 
-        # Tambahkan folder Composer global vendor bin ke PATH pengguna/sistem
         $composerGlobalBin = Join-Path -Path $env:APPDATA -ChildPath "Composer\vendor\bin"
         if (Test-Path -Path $composerGlobalBin) {
             Add-DirectoryToPath -PathToAdd $composerGlobalBin -Scope "User" | Out-Null
         }
 
         Refresh-CurrentSessionEnvironment
-        Write-LogSuccess "Laravel Installer berhasil diinstal dan didaftarkan ke sistem PATH."
+        Write-LogSuccess "Laravel Installer berhasil diinstal (laravel new ... siap digunakan)."
         return $true
     }
     catch {
-        Write-LogError "Gagal menginstal Laravel Installer: $_"
+        Write-LogError "Gagal menginstal Laravel Installer - $_"
         return $false
     }
 }
@@ -191,7 +178,6 @@ function Install-FlutterSdkOfficial {
     Write-LogStep "Menginstal Flutter SDK (Channel Stable) resmi..."
     Refresh-CurrentSessionEnvironment
 
-    # Cek ketersediaan Git
     $gitCmd = Get-Command "git" -ErrorAction SilentlyContinue
 
     if (Test-Path -Path (Join-Path -Path $TargetDir -ChildPath "bin\flutter.bat")) {
@@ -227,7 +213,7 @@ function Install-FlutterSdkOfficial {
             }
         }
         catch {
-            Write-LogError "Gagal menginstal Flutter via Git: $_"
+            Write-LogError "Gagal menginstal Flutter via Git - $_"
             return $false
         }
     } else {
@@ -236,3 +222,77 @@ function Install-FlutterSdkOfficial {
     }
 }
 
+function Install-LaragonOfficial {
+    Write-LogStep "Mengunduh & Menginstal Laragon 6.0.0 Resmi..."
+    Refresh-CurrentSessionEnvironment
+
+    $laragonExe = "C:\laragon\laragon.exe"
+    if (Test-Path -Path $laragonExe) {
+        Write-LogSuccess "Laragon 6.0.0 sudah terpasang di C:\laragon."
+        return $true
+    }
+
+    $tempInstaller = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "laragon-wamp.exe"
+    $laragonUrl = "https://github.com/leokhoa/laragon/releases/download/6.0.0/laragon-wamp.exe"
+
+    try {
+        Write-LogInfo "Mengunduh Laragon 6.0.0 dari GitHub: $laragonUrl..."
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $webClient = New-Object System.Net.WebClient
+        $webClient.Headers.Add("User-Agent", "LABInstaller")
+        $webClient.DownloadFile($laragonUrl, $tempInstaller)
+
+        Write-LogInfo "Memasang Laragon 6.0.0 ke C:\laragon..."
+        $process = Start-Process -FilePath $tempInstaller -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=`"C:\laragon`"" -NoNewWindow -Wait -PassThru
+
+        if ($process.ExitCode -eq 0 -or (Test-Path -Path $laragonExe)) {
+            Write-LogSuccess "Laragon 6.0.0 berhasil dipasang di C:\laragon."
+            Setup-LaragonEnvironment
+            return $true
+        } else {
+            Write-LogError "Instalasi Laragon selesai dengan kode: $($process.ExitCode)"
+            return $false
+        }
+    }
+    catch {
+        Write-LogError "Gagal menginstal Laragon 6.0.0 - $_"
+        return $false
+    }
+    finally {
+        if (Test-Path -Path $tempInstaller) {
+            Remove-Item -Path $tempInstaller -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Setup-LaragonEnvironment {
+    Write-LogStep "Menyiapkan integrasi lingkungan Laragon..."
+    
+    # Tambahkan git bawaan Laragon atau bin ke PATH jika diperlukan
+    $laragonGit = "C:\laragon\bin\git\cmd"
+    if (Test-Path -Path $laragonGit) {
+        Add-DirectoryToPath -PathToAdd $laragonGit -Scope "Machine" | Out-Null
+    }
+
+    # Buat shortcut Laragon di Desktop Publik jika belum ada
+    try {
+        $publicDesktop = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonDesktopDirectory)
+        $shortcutPath = Join-Path -Path $publicDesktop -ChildPath "Laragon.lnk"
+        if (-not (Test-Path -Path $shortcutPath) -and (Test-Path -Path "C:\laragon\laragon.exe")) {
+            $wshShell = New-Object -ComObject WScript.Shell
+            $shortcut = $wshShell.CreateShortcut($shortcutPath)
+            $shortcut.TargetPath = "C:\laragon\laragon.exe"
+            $shortcut.WorkingDirectory = "C:\laragon"
+            $shortcut.Description = "Laragon WAMP 6.0.0"
+            $shortcut.Save()
+            Write-LogSuccess "Shortcut Laragon dibuat di Desktop."
+        }
+    } catch {}
+}
+
+function Setup-XamppEnvironment {
+    Write-LogStep "Menyiapkan integrasi XAMPP & pencegahan bentrok port dengan Laragon..."
+    if (Get-Command Configure-WebServerPorts -ErrorAction SilentlyContinue) {
+        Configure-WebServerPorts
+    }
+}

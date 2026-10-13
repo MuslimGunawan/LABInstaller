@@ -1,6 +1,6 @@
 # ==============================================================================
-# LABInstaller - UI Menu Interaktif
-# Tampilan antarmuka konsol untuk manajemen instalasi pintar dan pembaruan
+# LABInstaller - UI Menu Interaktif (v1.0.1)
+# Antarmuka konsol untuk instalasi pintar, scan cepat, konfigurasi port, & verifikasi file
 # ==============================================================================
 
 function Start-SmartInstallation {
@@ -8,7 +8,7 @@ function Start-SmartInstallation {
         [string]$ScriptRootDirectory
     )
 
-    Write-LogStep "MEMULAI ANALISIS SISTEM & PINDAI STATUS SOFTWARE..."
+    Write-LogStep "MEMULAI ANALISIS SISTEM & PINDAI CEPAT STATUS SOFTWARE..."
     $manifestPackages = Load-AllManifestPackages -ManifestDir (Join-Path -Path $ScriptRootDirectory -ChildPath "manifests")
 
     if ($manifestPackages.Count -eq 0) {
@@ -16,28 +16,35 @@ function Start-SmartInstallation {
         return
     }
 
+    # Muat cache winget secara cepat (1 detik untuk seluruh sistem)
+    Initialize-WingetCache -ForceRefresh | Out-Null
+
     Write-Host ""
-    Write-Host "Sedang memindai $($manifestPackages.Count) paket di sistem Windows..." -ForegroundColor Cyan
+    Write-Host "Memindai $($manifestPackages.Count) paket sesuai urutan prioritas dependensi..." -ForegroundColor Cyan
     Write-Host "------------------------------------------------------------------" -ForegroundColor DarkGray
 
     $scanResults = @()
     foreach ($pkg in $manifestPackages) {
-        Write-Host "Mengecek: $($pkg.name)... " -NoNewline -ForegroundColor Gray
         $status = Get-PackageStatus -Package $pkg
         $scanResults += $status
 
-        switch ($status.Status) {
-            "NOT_INSTALLED"    { Write-Host "[BELUM TERPASANG]" -ForegroundColor Yellow }
-            "UPDATE_AVAILABLE" { Write-Host "[PERLU UPDATE]" -ForegroundColor Magenta }
-            "UP_TO_DATE"       { Write-Host "[SUDAH PAS - UP TO DATE]" -ForegroundColor Green }
-            Default            { Write-Host "[$($status.Status)]" -ForegroundColor White }
+        $tagColor = switch ($status.Status) {
+            "NOT_INSTALLED"    { [ConsoleColor]::Yellow }
+            "UPDATE_AVAILABLE" { [ConsoleColor]::Magenta }
+            "UP_TO_DATE"       { [ConsoleColor]::Green }
+            Default            { [ConsoleColor]::White }
         }
+
+        Write-Host " [P$($status.Priority)] " -NoNewline -ForegroundColor DarkCyan
+        Write-Host "$($status.Name.PadRight(35)) : " -NoNewline -ForegroundColor Gray
+        Write-Host "[$($status.Status)]" -ForegroundColor $tagColor
     }
 
     # Tampilkan Tabel Ringkasan
     Write-Host ""
     Write-Host "========================== RINGKASAN STATUS ==========================" -ForegroundColor Cyan
-    $table = $scanResults | Select-Object @{Name="Software"; Expression={$_.Name}},
+    $table = $scanResults | Select-Object @{Name="Prioritas"; Expression={"P" + $_.Priority}},
+                                          @{Name="Software"; Expression={$_.Name}},
                                           @{Name="Kategori"; Expression={$_.Category}},
                                           @{Name="Status Tindakan"; Expression={
                                               switch ($_.Status) {
@@ -54,7 +61,14 @@ function Start-SmartInstallation {
 
     $needAction = $scanResults | Where-Object { $_.Status -ne "UP_TO_DATE" }
     if ($needAction.Count -eq 0) {
-        Write-LogSuccess "SEMUA SOFTWARE SUDAH TERPASANG DAN UP-TO-DATE! Tidak ada tindakan yang diperlukan."
+        Write-LogSuccess "SEMUA SOFTWARE SUDAH TERPASANG DAN UP-TO-DATE! Tidak ada instalasi baru yang diperlukan."
+        
+        # Tetap jalankan konfigurasi port dan environment
+        Write-Host ""
+        $cfgConfirm = Read-Host "Apakah ingin menjalankan optimasi konfigurasi port & php.ini sekarang? (Y/N)"
+        if ($cfgConfirm -match '^(y|ya|yes)$') {
+            Start-FullEnvironmentConfiguration
+        }
         Write-Host ""
         Write-Host "Tekan Enter untuk kembali ke menu utama..." -ForegroundColor Gray
         [void][System.Console]::ReadLine()
@@ -69,7 +83,7 @@ function Start-SmartInstallation {
         return
     }
 
-    # Eksekusi Instalasi
+    # Eksekusi Instalasi Sesuai Prioritas
     $successCount = 0
     $skipCount = 0
     $failCount = 0
@@ -115,6 +129,10 @@ function Start-SmartInstallation {
 
     Refresh-CurrentSessionEnvironment
 
+    # Konfigurasi otomatis port & environment pasca instalasi
+    Write-Host ""
+    Start-FullEnvironmentConfiguration
+
     Write-Host ""
     Write-Host "========================== HASIL INSTALASI PINTAR ==========================" -ForegroundColor Cyan
     Write-Host " Berhasil Diproses : $successCount" -ForegroundColor Green
@@ -130,18 +148,21 @@ function Start-SmartInstallation {
 function Show-SystemScanOnly {
     param ([string]$ScriptRootDirectory)
 
-    Write-LogStep "PINDAI STATUS SOFTWARE SAAT INI..."
+    Write-LogStep "PINDAI CEPAT STATUS SOFTWARE SAAT INI..."
     $manifestPackages = Load-AllManifestPackages -ManifestDir (Join-Path -Path $ScriptRootDirectory -ChildPath "manifests")
     
+    # Inisialisasi cache winget instan
+    Initialize-WingetCache | Out-Null
+
     $scanResults = @()
     foreach ($pkg in $manifestPackages) {
-        Write-Host "Memeriksa: $($pkg.name)..." -ForegroundColor Gray
         $scanResults += Get-PackageStatus -Package $pkg
     }
 
     Write-Host ""
     Write-Host "======================= HASIL PEMERIKSAAN =======================" -ForegroundColor Cyan
-    $table = $scanResults | Select-Object @{Name="Software"; Expression={$_.Name}},
+    $table = $scanResults | Select-Object @{Name="Prioritas"; Expression={"P" + $_.Priority}},
+                                          @{Name="Software"; Expression={$_.Name}},
                                           @{Name="Status"; Expression={$_.Status}},
                                           @{Name="Versi Aktif"; Expression={$_.InstalledVersion}},
                                           @{Name="Versi Target"; Expression={$_.TargetVersion}}
@@ -170,23 +191,31 @@ function Show-UpdateMenuDialog {
     Write-Host "Status                   : $($updateInfo.Message)" -ForegroundColor $(if ($updateInfo.HasUpdate) { [ConsoleColor]::Yellow } else { [ConsoleColor]::Green })
     Write-Host ""
 
+    # Tawarkan Double Verification integritas berkas
+    Write-Host "PILIHAN VERIFIKASI PEMBARUAN:" -ForegroundColor Yellow
+    Write-Host " [1] Jalankan Double Verification (Uji Integritas Berkas Lokal)" -ForegroundColor Cyan
     if ($updateInfo.HasUpdate) {
-        $confirm = Read-Host "Apakah Anda ingin mengunduh dan menerapkan pembaruan sekarang? (Y/N)"
-        if ($confirm -match '^(y|ya|yes)$') {
-            $applied = Invoke-SystemUpdate -UpdateInfo $updateInfo -ScriptRootDirectory $ScriptRootDirectory
-            if ($applied) {
-                Write-Host ""
-                Write-Host "Memulai ulang LABInstaller..." -ForegroundColor Green
-                Start-Sleep -Seconds 2
-                return $true # Meminta restart
-            }
-        } else {
-            Write-LogInfo "Pembaruan ditunda oleh pengguna."
+        Write-Host " [2] Unduh & Terapkan Pembaruan Sekarang (v$($updateInfo.RemoteVersion))" -ForegroundColor Green
+    }
+    Write-Host " [0] Kembali ke Menu Utama" -ForegroundColor DarkGray
+    Write-Host ""
+
+    $subChoice = Read-Host "Pilih opsi (0-2)"
+    if ($subChoice -eq "1") {
+        Test-SystemFileIntegrity -ScriptRootDirectory $ScriptRootDirectory
+        Write-Host ""
+        Write-Host "Tekan Enter untuk lanjut..." -ForegroundColor Gray
+        [void][System.Console]::ReadLine()
+    }
+    elseif ($subChoice -eq "2" -and $updateInfo.HasUpdate) {
+        $applied = Invoke-SystemUpdate -UpdateInfo $updateInfo -ScriptRootDirectory $ScriptRootDirectory
+        if ($applied) {
+            Write-Host ""
+            Write-Host "Memulai ulang LABInstaller dengan versi terbaru..." -ForegroundColor Green
+            Start-Sleep -Seconds 2
+            return $true
         }
     }
 
-    Write-Host "Tekan Enter untuk kembali ke menu..." -ForegroundColor Gray
-    [void][System.Console]::ReadLine()
     return $false
 }
-

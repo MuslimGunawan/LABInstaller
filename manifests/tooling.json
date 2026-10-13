@@ -4,6 +4,7 @@
     "name": "Composer (PHP Dependency Manager)",
     "category": "PHP Tooling",
     "type": "custom",
+    "priority": 6,
     "customHandler": "Install-ComposerOfficial",
     "verifyCommand": "composer",
     "verifyArgs": ["--version"],
@@ -14,20 +15,21 @@
     "name": "Laravel Installer CLI",
     "category": "PHP Framework Tool",
     "type": "custom",
+    "priority": 7,
     "customHandler": "Install-LaravelInstallerOfficial",
     "verifyCommand": "laravel",
     "verifyArgs": ["--version"],
-    "description": "CLI resmi untuk membuat dan mengelola proyek framework Laravel secara instan."
+    "description": "CLI resmi untuk membuat proyek Laravel (laravel new example-app)."
   },
   {
     "id": "Custom.FlutterSDK",
     "name": "Flutter SDK (Stable)",
     "category": "Mobile & Multi-platform SDK",
     "type": "custom",
+    "priority": 8,
     "customHandler": "Install-FlutterSdkOfficial",
     "verifyCommand": "flutter",
     "verifyArgs": ["--version"],
     "description": "SDK UI resmi dari Google untuk membangun aplikasi Android, iOS, Web, dan Desktop."
   }
 ]
-

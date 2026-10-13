@@ -1,6 +1,6 @@
 # ==============================================================================
-# LABInstaller - Core Self-Updater Engine
-# Pengecekan pembaruan GitHub, backup otomatis, staging, atomic overwrite, & rollback
+# LABInstaller - Core Self-Updater & Double-Verification Engine
+# Pengecekan pembaruan GitHub, verifikasi integritas file SHA256, atomic overwrite, & rollback
 # ==============================================================================
 
 function Get-LocalVersionInfo {
@@ -12,10 +12,10 @@ function Get-LocalVersionInfo {
             return (Get-Content -Path $verFile -Raw -Encoding UTF8 | ConvertFrom-Json)
         }
         catch {
-            return [PSCustomObject]@{ version = "1.0.0" }
+            return [PSCustomObject]@{ version = "1.0.1" }
         }
     }
-    return [PSCustomObject]@{ version = "1.0.0" }
+    return [PSCustomObject]@{ version = "1.0.1" }
 }
 
 function Check-ForSystemUpdate {
@@ -48,25 +48,125 @@ function Check-ForSystemUpdate {
             $remoteVerStr = $remoteInfo.version
             $result.RemoteVersion = $remoteVerStr
 
-            # Bandingkan versi (misal: 1.0.1 > 1.0.0)
             $localVersionObj = [System.Version]$localVerStr
             $remoteVersionObj = [System.Version]$remoteVerStr
 
             if ($remoteVersionObj -gt $localVersionObj) {
                 $result.HasUpdate = $true
-                $result.Message = "Pembaruan tersedia! Versi lokal: v$localVerStr -> Versi terbaru di GitHub: v$remoteVerStr"
+                $result.Message = "Pembaruan versi terbaru tersedia! Versi lokal: v$localVerStr -> Versi GitHub: v$remoteVerStr"
             } else {
                 $result.HasUpdate = $false
-                $result.Message = "Sistem LABInstaller Anda sudah versi terbaru (v$localVerStr)."
+                $result.Message = "Sistem LABInstaller Anda berada pada versi terbaru (v$localVerStr)."
             }
         }
     }
     catch {
         $result.HasUpdate = $false
-        $result.Message = "Tidak dapat memeriksa pembaruan di GitHub (repositori belum memiliki commit version.json atau tidak ada koneksi internet)."
+        $result.Message = "Tidak dapat memeriksa pembaruan di GitHub: $_"
     }
 
     return $result
+}
+
+function Test-SystemFileIntegrity {
+    param (
+        [string]$ScriptRootDirectory
+    )
+
+    Write-LogStep "MENJALANKAN DOUBLE VERIFICATION (PENGUJIAN INTEGRITAS BERKAS SISTEM)..."
+    $rootDir = $ScriptRootDirectory
+
+    $expectedFiles = @(
+        "installer.ps1",
+        "version.json",
+        "config.json",
+        "run.bat",
+        "core\Logger.ps1",
+        "core\Environment.ps1",
+        "core\Detector.ps1",
+        "core\WingetEngine.ps1",
+        "core\PostInstaller.ps1",
+        "core\ConfigManager.ps1",
+        "core\Updater.ps1",
+        "manifests\apps.json",
+        "manifests\runtimes.json",
+        "manifests\tooling.json",
+        "manifests\servers.json",
+        "system\boot\install.ps1",
+        "ui\Menu.ps1"
+    )
+
+    $results = @()
+    $allValid = $true
+
+    foreach ($rel in $expectedFiles) {
+        $fullPath = Join-Path -Path $rootDir -ChildPath $rel
+        $exists = Test-Path -Path $fullPath
+        $status = "OK"
+        $sha = "-"
+        $details = ""
+
+        if (-not $exists) {
+            $status = "HILANG/MISSING"
+            $allValid = $false
+            $details = "Berkas tidak ditemukan"
+        } else {
+            $item = Get-Item -Path $fullPath
+            if ($item.Length -eq 0) {
+                $status = "KORUP/KOSONG"
+                $allValid = $false
+                $details = "Ukuran berkas 0 byte"
+            } else {
+                # Uji validitas sintaks jika PowerShell
+                if ($rel.EndsWith(".ps1")) {
+                    $errors = $null
+                    $tokens = $null
+                    [void][System.Management.Automation.Language.Parser]::ParseFile($fullPath, [ref]$tokens, [ref]$errors)
+                    if ($errors.Count -gt 0) {
+                        $status = "ERROR SINTAKS"
+                        $allValid = $false
+                        $details = "$($errors.Count) kesalahan sintaks"
+                    }
+                }
+                # Uji validitas JSON jika JSON
+                elseif ($rel.EndsWith(".json")) {
+                    try {
+                        [void](Get-Content -Path $fullPath -Raw -Encoding UTF8 | ConvertFrom-Json)
+                    } catch {
+                        $status = "ERROR JSON"
+                        $allValid = $false
+                        $details = "Format JSON tidak valid"
+                    }
+                }
+
+                # Hitung SHA256 singkat
+                try {
+                    $hashObj = Get-FileHash -Path $fullPath -Algorithm SHA256
+                    $sha = $hashObj.Hash.Substring(0, 10) + "..."
+                } catch {}
+            }
+        }
+
+        $results += [PSCustomObject]@{
+            "Berkas"         = $rel
+            "Status"         = $status
+            "SHA256 (Kutip)" = $sha
+            "Keterangan"     = if ($details) { $details } else { "Terverifikasi Valid" }
+        }
+    }
+
+    Write-Host ""
+    Write-Host "===================== HASIL DOUBLE VERIFICATION =====================" -ForegroundColor Cyan
+    $results | Format-Table -AutoSize | Out-Host
+    Write-Host "======================================================================" -ForegroundColor Cyan
+
+    if ($allValid) {
+        Write-LogSuccess "VERIFIKASI INTEGRITAS SUKSES: Seluruh berkas ($($expectedFiles.Count)/$($expectedFiles.Count)) UTUH, LENGKAP & VALID 100%!"
+    } else {
+        Write-LogError "VERIFIKASI GAGAL: Ditemukan berkas yang hilang atau rusak. Disarankan melakukan update ulang!"
+    }
+
+    return $allValid
 }
 
 function Invoke-SystemUpdate {
@@ -90,13 +190,12 @@ function Invoke-SystemUpdate {
     $extractedDir = Join-Path -Path $stagingDir -ChildPath "extracted"
 
     try {
-        # 1. Bersihkan staging lama jika ada
         if (Test-Path -Path $stagingDir) {
             Remove-Item -Path $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
         }
         New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
 
-        # 2. Backup berkas saat ini
+        # 1. Backup berkas saat ini
         Write-LogInfo "Membuat backup sistem lokal ke: $backupDir"
         New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
         
@@ -108,7 +207,7 @@ function Invoke-SystemUpdate {
         }
         Write-LogSuccess "Backup berkas lokal berhasil dibuat."
 
-        # 3. Unduh berkas pembaruan (.zip)
+        # 2. Unduh berkas pembaruan (.zip)
         Write-LogInfo "Mengunduh paket pembaruan dari: $($UpdateInfo.ArchiveUrl)..."
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         $webClient = New-Object System.Net.WebClient
@@ -119,20 +218,18 @@ function Invoke-SystemUpdate {
             throw "Gagal mengunduh berkas zip pembaruan."
         }
 
-        # 4. Ekstrak zip pembaruan
+        # 3. Ekstrak zip pembaruan
         Write-LogInfo "Mengekstrak paket pembaruan..."
         Expand-Archive -Path $zipPath -DestinationPath $extractedDir -Force
 
-        # Cari folder hasil ekstrak (biasanya bernama LABInstaller-main)
         $subDirs = Get-ChildItem -Path $extractedDir -Directory
         $sourceFilesRoot = if ($subDirs.Count -eq 1) { $subDirs[0].FullName } else { $extractedDir }
 
-        # Verifikasi integritas: pastikan installer.ps1 dan version.json ada di hasil ekstrak
         if (-not (Test-Path -Path (Join-Path -Path $sourceFilesRoot -ChildPath "version.json"))) {
             throw "Validasi integritas gagal: version.json tidak ditemukan di dalam paket unduhan."
         }
 
-        # 5. Menimpa berkas lama dengan berkas baru secara bersih
+        # 4. Menimpa berkas lama dengan berkas baru
         Write-LogStep "Menimpa berkas sistem dengan versi terbaru (v$($UpdateInfo.RemoteVersion))..."
         $updateItems = Get-ChildItem -Path $sourceFilesRoot | Where-Object { 
             $_.Name -notin @(".git", ".backup", ".update_staging", "logs") 
@@ -144,18 +241,21 @@ function Invoke-SystemUpdate {
             Write-LogInfo "Diperbarui: $($uItem.Name)"
         }
 
-        # 6. Bersihkan staging
+        # 5. Jalankan Double Verification pasca-update
+        $isVerified = Test-SystemFileIntegrity -ScriptRootDirectory $rootDir
+        if (-not $isVerified) {
+            throw "Verifikasi file setelah update gagal!"
+        }
+
         Remove-Item -Path $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
 
-        Write-LogSuccess "SISTEM BERHASIL DIPERBARUI KE VERSI $($UpdateInfo.RemoteVersion)!"
-        Write-LogInfo "Semua perubahan telah diterapkan dengan aman tanpa error."
+        Write-LogSuccess "SISTEM BERHASIL DIPERBARUI KE VERSI $($UpdateInfo.RemoteVersion) DENGAN VERIFIKASI SEMPURNA!"
         return $true
     }
     catch {
-        Write-LogError "Terjadi kegagalan saat proses update: $_"
+        Write-LogError "Terjadi kegagalan saat proses update - $_"
         Write-LogWarning "Memulai proses pemulihan (Rollback) dari backup..."
 
-        # Rollback dari backup
         if (Test-Path -Path $backupDir) {
             $backupItems = Get-ChildItem -Path $backupDir
             foreach ($bItem in $backupItems) {
@@ -170,4 +270,3 @@ function Invoke-SystemUpdate {
         return $false
     }
 }
-

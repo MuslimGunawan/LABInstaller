@@ -1,8 +1,7 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-13",
-  "description": "Sistem Instalasi Pintar & Otomatis untuk Software & Environment Development di Windows"
+  "description": "v1.0.1: Pemindaian instan berkecepatan tinggi, PHP 8.5, Laragon 6.0.0, XAMPP, NetBeans, Arduino IDE, Node.js LTS, Manajemen Port Otomatis, dan Fitur Double Verification"
 }
-

@@ -4,16 +4,36 @@
     "name": "Visual Studio Code",
     "category": "Code Editor & IDE",
     "type": "winget",
+    "priority": 11,
     "wingetId": "Microsoft.VisualStudioCode",
     "verifyCommand": "code",
     "verifyArgs": ["--version"],
     "description": "Editor kode resmi dari Microsoft dengan dukungan ekstensi lengkap."
   },
   {
+    "id": "Apache.NetBeans",
+    "name": "Apache NetBeans IDE",
+    "category": "Java & Polyglot IDE",
+    "type": "winget",
+    "priority": 12,
+    "wingetId": "Apache.NetBeans",
+    "description": "IDE resmi Apache untuk pengembangan Java, PHP, HTML5, dan C/C++."
+  },
+  {
+    "id": "ArduinoSA.IDE.stable",
+    "name": "Arduino IDE",
+    "category": "Embedded & IoT IDE",
+    "type": "winget",
+    "priority": 13,
+    "wingetId": "ArduinoSA.IDE.stable",
+    "description": "IDE resmi dari Arduino SA untuk pemrograman mikrokontroler dan board IoT."
+  },
+  {
     "id": "Google.Chrome",
     "name": "Google Chrome",
     "category": "Web Browser",
     "type": "winget",
+    "priority": 14,
     "wingetId": "Google.Chrome",
     "verifyCommand": "chrome",
     "verifyArgs": ["--version"],
@@ -24,20 +44,10 @@
     "name": "Oracle VirtualBox",
     "category": "Virtualization",
     "type": "winget",
+    "priority": 15,
     "wingetId": "Oracle.VirtualBox",
     "verifyCommand": "VBoxManage",
     "verifyArgs": ["--version"],
     "description": "Perangkat lunak virtualisasi open-source untuk menjalankan OS di lingkungan virtual."
-  },
-  {
-    "id": "Git.Git",
-    "name": "Git for Windows",
-    "category": "Version Control",
-    "type": "winget",
-    "wingetId": "Git.Git",
-    "verifyCommand": "git",
-    "verifyArgs": ["--version"],
-    "description": "Sistem kontrol versi resmi terdistribusi untuk melacak perubahan kode sumber."
   }
 ]
-
