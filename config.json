@@ -4,8 +4,10 @@
     "githubOwner": "MuslimGunawan",
     "githubRepo": "LABInstaller",
     "githubBranch": "main",
-    "rawVersionUrl": "https://raw.githubusercontent.com/MuslimGunawan/LABInstaller/main/version.json",
-    "archiveUrl": "https://github.com/MuslimGunawan/LABInstaller/archive/refs/heads/main.zip",
+    "rawVersionUrl": "https://api.github.com/repos/MuslimGunawan/LABInstaller/contents/version.json",
+    "fallbackRawUrl": "https://raw.githubusercontent.com/MuslimGunawan/LABInstaller/main/version.json",
+    "archiveUrl": "https://codeload.github.com/MuslimGunawan/LABInstaller/zip/refs/heads/main",
+    "fallbackArchiveUrl": "https://github.com/MuslimGunawan/LABInstaller/archive/refs/heads/main.zip",
     "checkUpdateOnStartup": true
   },
   "paths": {

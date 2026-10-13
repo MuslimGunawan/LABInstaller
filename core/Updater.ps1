@@ -20,8 +20,9 @@ function Get-LocalVersionInfo {
 
 function Check-ForSystemUpdate {
     param (
-        [string]$RemoteVersionUrl = "https://raw.githubusercontent.com/MuslimGunawan/LABInstaller/main/version.json",
-        [string]$ArchiveUrl = "https://github.com/MuslimGunawan/LABInstaller/archive/refs/heads/main.zip"
+        [string]$RemoteVersionUrl = "https://api.github.com/repos/MuslimGunawan/LABInstaller/contents/version.json",
+        [string]$FallbackRawUrl   = "https://raw.githubusercontent.com/MuslimGunawan/LABInstaller/main/version.json",
+        [string]$ArchiveUrl       = "https://codeload.github.com/MuslimGunawan/LABInstaller/zip/refs/heads/main"
     )
 
     $localInfo = Get-LocalVersionInfo
@@ -39,15 +40,32 @@ function Check-ForSystemUpdate {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         $webClient = New-Object System.Net.WebClient
         $webClient.Headers.Add("User-Agent", "LABInstaller-Updater")
-        $webClient.Headers.Add("Cache-Control", "no-cache")
+        $webClient.Headers.Add("Cache-Control", "no-cache, no-store, must-revalidate")
+        $webClient.Headers.Add("Pragma", "no-cache")
 
-        $rawJson = $webClient.DownloadString($RemoteVersionUrl)
-        $remoteInfo = $rawJson | ConvertFrom-Json
+        $remoteVerStr = $null
 
-        if ($remoteInfo -and $remoteInfo.version) {
-            $remoteVerStr = $remoteInfo.version
+        # 1. Coba via GitHub REST API (Real-Time 0 Detik Delay Tanpa Cache CDN)
+        try {
+            $webClient.Headers.Set("Accept", "application/vnd.github.v3.raw")
+            $rawJson = $webClient.DownloadString($RemoteVersionUrl)
+            $remoteMeta = $rawJson | ConvertFrom-Json
+            if ($remoteMeta -and $remoteMeta.version) {
+                $remoteVerStr = $remoteMeta.version
+            }
+        }
+        catch {
+            # 2. Fallback via raw.githubusercontent.com jika API limit tercapai
+            $webClient.Headers.Remove("Accept")
+            $rawJson = $webClient.DownloadString($FallbackRawUrl + "?t=" + [Guid]::NewGuid().ToString('N'))
+            $remoteMeta = $rawJson | ConvertFrom-Json
+            if ($remoteMeta -and $remoteMeta.version) {
+                $remoteVerStr = $remoteMeta.version
+            }
+        }
+
+        if ($remoteVerStr) {
             $result.RemoteVersion = $remoteVerStr
-
             $localVersionObj = [System.Version]$localVerStr
             $remoteVersionObj = [System.Version]$remoteVerStr
 
@@ -62,7 +80,7 @@ function Check-ForSystemUpdate {
     }
     catch {
         $result.HasUpdate = $false
-        $result.Message = "Tidak dapat memeriksa pembaruan di GitHub: $_"
+        $result.Message = "Tidak dapat memeriksa pembaruan di GitHub - $_"
     }
 
     return $result
@@ -212,7 +230,15 @@ function Invoke-SystemUpdate {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         $webClient = New-Object System.Net.WebClient
         $webClient.Headers.Add("User-Agent", "LABInstaller-Updater")
-        $webClient.DownloadFile($UpdateInfo.ArchiveUrl, $zipPath)
+        
+        try {
+            $webClient.DownloadFile($UpdateInfo.ArchiveUrl, $zipPath)
+        }
+        catch {
+            Write-LogWarning "Gagal mengunduh dari tautan utama, mencoba tautan cadangan GitHub..."
+            $fallbackUrl = "https://github.com/MuslimGunawan/LABInstaller/archive/refs/heads/main.zip"
+            $webClient.DownloadFile($fallbackUrl, $zipPath)
+        }
 
         if (-not (Test-Path -Path $zipPath)) {
             throw "Gagal mengunduh berkas zip pembaruan."

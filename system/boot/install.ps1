@@ -60,7 +60,7 @@ if (-not $isAdmin) {
     Write-Host "==================================================================" -ForegroundColor Yellow
     Write-Host ""
     
-    $elevateCommand = "`$env:LAB_TARGET_DIR = '$currentLocation'; Set-Location -LiteralPath '$currentLocation'; irm 'https://raw.githubusercontent.com/MuslimGunawan/LABInstaller/main/system/boot/install.ps1?$([Guid]::NewGuid())' | iex"
+    $elevateCommand = "`$env:LAB_TARGET_DIR = '$currentLocation'; Set-Location -LiteralPath '$currentLocation'; irm 'https://api.github.com/repos/MuslimGunawan/LABInstaller/contents/system/boot/install.ps1' -H @{Accept='application/vnd.github.v3.raw'; 'User-Agent'='LABInstaller'} | iex"
     Start-Process powershell.exe -WorkingDirectory "$currentLocation" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$elevateCommand`"" -Verb RunAs
     exit
 }
@@ -86,7 +86,7 @@ Write-Host "  Target Direktori : $installDir" -ForegroundColor Yellow
 Write-Host "==================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-$zipUrl = "https://github.com/MuslimGunawan/LABInstaller/archive/refs/heads/main.zip"
+$zipUrl = "https://codeload.github.com/MuslimGunawan/LABInstaller/zip/refs/heads/main"
 $tempZip = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "labinstaller_boot_$([Guid]::NewGuid().ToString('N')).zip"
 $tempExtract = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "labinstaller_ext_$([Guid]::NewGuid().ToString('N'))"
 

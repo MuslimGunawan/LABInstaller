@@ -52,13 +52,20 @@ Sistem otomasi berbasis PowerShell dan Windows Package Manager (`winget`) untuk 
 
 ---
 
-## ⚡ Cara Menjalankan di Komputer LAB (Sangat Praktis!)
+## ⚡ Cara Menjalankan di Komputer LAB (Sangat Praktis & 0 Detik Delay)
 
 Di komputer lab mana pun (PC baru/lama), cukup buka **PowerShell** dan tempelkan (*paste*) satu baris perintah ini:
 
 ```powershell
-irm "https://raw.githubusercontent.com/MuslimGunawan/LABInstaller/main/system/boot/install.ps1?$([Guid]::NewGuid())" | iex
+irm "https://api.github.com/repos/MuslimGunawan/LABInstaller/contents/system/boot/install.ps1" -H @{Accept="application/vnd.github.v3.raw"; "User-Agent"="LABInstaller"} | iex
 ```
+
+> **Catatan Anti-Cache:** Perintah di atas langsung memanggil GitHub REST API sehingga **100% instan (0 detik delay)** tanpa terhalang cache Fastly CDN (yang biasanya delay hingga 5 menit pada link `raw.githubusercontent.com`).
+> 
+> *Alternatif URL standar:*
+> ```powershell
+> irm "https://raw.githubusercontent.com/MuslimGunawan/LABInstaller/main/system/boot/install.ps1" | iex
+> ```
 
 > **Apa yang terjadi secara otomatis?**
 > 1. Meminta hak akses Administrator jika belum aktif.
