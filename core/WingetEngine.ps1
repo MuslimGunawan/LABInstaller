@@ -427,7 +427,7 @@ function Invoke-DirectInstaller {
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         $wc = New-Object System.Net.WebClient
-        $wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) LABInstaller/1.0.6")
+        $wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) LABInstaller")
 
         # Unduh dengan retry hingga 2 kali
         $downloadSuccess = $false
