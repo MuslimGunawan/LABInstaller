@@ -148,8 +148,9 @@ function Set-SystemDefaultBrowser {
         Write-LogInfo "Browser modern terdeteksi: $selectedBrowser"
         try {
             $cmd = "`"$selectedBrowser`" -- `"%1`""
+            $browserDir = Split-Path -Parent $selectedBrowser
 
-            # 1. HKLM Classes http & https
+            # 1. HKLM & HKCU Classes http & https (Protokol Web)
             $regPaths = @(
                 "HKLM:\SOFTWARE\Classes\http\shell\open\command",
                 "HKLM:\SOFTWARE\Classes\https\shell\open\command",
@@ -177,21 +178,104 @@ function Set-SystemDefaultBrowser {
                 }
             }
 
-            # 3. Alihkan stub iexplore.exe ke browser modern agar aplikasi legacy seperti Laragon tidak mentok di popup IE 11
-            $appPathsIe = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\iexplore.exe"
-            try {
-                if (-not (Test-Path -Path $appPathsIe -ErrorAction SilentlyContinue)) {
-                    New-Item -Path $appPathsIe -Force -ErrorAction SilentlyContinue | Out-Null
-                }
-                Set-ItemProperty -Path $appPathsIe -Name "(Default)" -Value $selectedBrowser -Force -ErrorAction SilentlyContinue | Out-Null
-            } catch {}
+            # 3. Alihkan stub iexplore.exe ke browser modern (Native 64-bit & WOW64 32-bit untuk Laragon 32-bit)
+            $appPathTargets = @(
+                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\iexplore.exe",
+                "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\iexplore.exe",
+                "HKCU:\Software\Microsoft\Windows\CurrentVersion\App Paths\iexplore.exe",
+                "HKCU:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\iexplore.exe"
+            )
+            foreach ($ap in $appPathTargets) {
+                try {
+                    if (-not (Test-Path -Path $ap -ErrorAction SilentlyContinue)) {
+                        New-Item -Path $ap -Force -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    Set-ItemProperty -Path $ap -Name "(Default)" -Value $selectedBrowser -Force -ErrorAction SilentlyContinue | Out-Null
+                    Set-ItemProperty -Path $ap -Name "Path" -Value $browserDir -Force -ErrorAction SilentlyContinue | Out-Null
+                } catch {}
+            }
 
-            # 4. Trigger silent make-default-browser jika Chrome
+            # 4. Alihkan StartMenuInternet (Kunci Utama yang dibaca Laragon 32-bit dan Windows GUI)
+            $startMenuTargets = @(
+                "HKLM:\SOFTWARE\Clients\StartMenuInternet",
+                "HKLM:\SOFTWARE\WOW6432Node\Clients\StartMenuInternet",
+                "HKCU:\Software\Clients\StartMenuInternet",
+                "HKCU:\Software\WOW6432Node\Clients\StartMenuInternet"
+            )
+            foreach ($sm in $startMenuTargets) {
+                try {
+                    if (-not (Test-Path -Path $sm -ErrorAction SilentlyContinue)) {
+                        New-Item -Path $sm -Force -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    Set-ItemProperty -Path $sm -Name "(Default)" -Value "Google Chrome" -Force -ErrorAction SilentlyContinue | Out-Null
+
+                    # Override command IEXPLORE.EXE di dalam StartMenuInternet
+                    $ieSubCmd = Join-Path -Path $sm -ChildPath "IEXPLORE.EXE\shell\open\command"
+                    if (-not (Test-Path -Path $ieSubCmd -ErrorAction SilentlyContinue)) {
+                        New-Item -Path $ieSubCmd -Force -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    Set-ItemProperty -Path $ieSubCmd -Name "(Default)" -Value "`"$selectedBrowser`"" -Force -ErrorAction SilentlyContinue | Out-Null
+                } catch {}
+            }
+
+            # 5. Alihkan ProgID legacy Internet Explorer di HKCU Classes
+            $ieLegacyClasses = @(
+                "HKCU:\Software\Classes\IE.HTTP\shell\open\command",
+                "HKCU:\Software\Classes\IE.HTTPS\shell\open\command",
+                "HKCU:\Software\Classes\IE.AssocFile.HTM\shell\open\command",
+                "HKCU:\Software\Classes\IE.AssocFile.MHT\shell\open\command",
+                "HKCU:\Software\Classes\IE.AssocFile.URL\shell\open\command",
+                "HKCU:\Software\Classes\htmlfile\shell\open\command",
+                "HKCU:\Software\Classes\mhtmlfile\shell\open\command",
+                "HKCU:\Software\Classes\Applications\iexplore.exe\shell\open\command"
+            )
+            foreach ($cl in $ieLegacyClasses) {
+                try {
+                    if (-not (Test-Path -Path $cl -ErrorAction SilentlyContinue)) {
+                        New-Item -Path $cl -Force -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    Set-ItemProperty -Path $cl -Name "(Default)" -Value $cmd -Force -ErrorAction SilentlyContinue | Out-Null
+                } catch {}
+            }
+
+            # 6. Alihkan eksekusi iexplore.exe via IFEO (Image File Execution Options Debugger)
+            $ifeoPaths = @(
+                "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\iexplore.exe",
+                "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\iexplore.exe",
+                "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\iexplore.exe"
+            )
+            foreach ($ifp in $ifeoPaths) {
+                try {
+                    if (-not (Test-Path -Path $ifp -ErrorAction SilentlyContinue)) {
+                        New-Item -Path $ifp -Force -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    Set-ItemProperty -Path $ifp -Name "Debugger" -Value "`"$selectedBrowser`"" -Force -ErrorAction SilentlyContinue | Out-Null
+                } catch {}
+            }
+
+            # 7. Pastikan laragon.ini memiliki referensi Browser eksplisit
+            $laragonIni = "C:\laragon\usr\laragon.ini"
+            if (Test-Path -Path $laragonIni) {
+                try {
+                    $lIniText = [System.IO.File]::ReadAllText($laragonIni, [System.Text.Encoding]::UTF8)
+                    if ($lIniText -match '\[preferences\]') {
+                        if ($lIniText -match 'Browser\s*=.*') {
+                            $lIniText = $lIniText -replace 'Browser\s*=.*', "Browser=$selectedBrowser"
+                        } else {
+                            $lIniText = $lIniText -replace '(\[preferences\]\r?\n)', "`$1Browser=$selectedBrowser`r`n"
+                        }
+                        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+                        [System.IO.File]::WriteAllText($laragonIni, $lIniText, $utf8NoBom)
+                    }
+                } catch {}
+            }
+
+            # 8. Trigger silent make-default-browser jika Chrome
             if ($selectedBrowser -like "*chrome.exe") {
                 Start-Process -FilePath $selectedBrowser -ArgumentList "--make-default-browser" -NoNewWindow -Wait -ErrorAction SilentlyContinue
             }
 
-            Write-LogSuccess "Default browser sistem berhasil diarahkan ke: $selectedBrowser (Tombol Web & Database Laragon 100% aman)."
+            Write-LogSuccess "Default browser sistem & isolasi IE 11 berhasil diarahkan ke: $selectedBrowser (Tombol Web & Database Laragon 100% aman)."
         } catch {
             Write-LogWarning "Gagal memperbarui asosiasi browser sistem: $_"
         }

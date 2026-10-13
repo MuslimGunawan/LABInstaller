@@ -1,7 +1,7 @@
 {
-  "version": "1.0.12",
+  "version": "1.0.13",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
-  "releaseDate": "2026-10-13",
-  "description": "v1.0.12: Pengaktifan Laragon Nginx di Port 8081 non-BOM (Apache + Nginx aktif bersamaan) & Asosiasi System Default Browser Chrome/Edge untuk tombol Web/Database Laragon & Admin XAMPP bebas error IE11"
+  "releaseDate": "2026-10-14",
+  "description": "v1.0.13: Perbaikan tuntas tombol Web & Database Laragon: Penyelarasan registry 32-bit (WOW6432Node) StartMenuInternet, App Paths, IFEO Debugger, dan Preferences Browser Laragon langsung ke Google Chrome/Edge"
 }
