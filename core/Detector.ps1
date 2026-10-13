@@ -1,6 +1,6 @@
 # ==============================================================================
 # LABInstaller - Core Detector (Zero-Hang Hybrid Engine)
-# Pendeteksian instan berbasis Windows Registry & CLI (100% Offline & Anti-Freeze)
+# Pendeteksian instan berbasis Windows Registry & CLI (100% Offline, Anti-Freeze, Anti-Shim)
 # ==============================================================================
 
 $global:RegistryAppCache = $null
@@ -45,12 +45,14 @@ function Get-PackageStatus {
         Initialize-RegistryCache | Out-Null
     }
 
+    $priorityVal = if ($null -ne $Package.priority) { [int]$Package.priority } else { 99 }
+
     $result = [PSCustomObject]@{
         Id               = $Package.id
         Name             = $Package.name
         Category         = $Package.category
         Type             = $Package.type
-        Priority         = if ($Package.priority) { [int]$Package.priority } else { 99 }
+        Priority         = $priorityVal
         Status           = "NOT_INSTALLED"
         InstalledVersion = "-"
         TargetVersion    = "Terbaru"
@@ -83,6 +85,12 @@ function Get-PackageStatus {
         $cmdName = $Package.verifyCommand
         $foundCmd = Get-Command $cmdName -ErrorAction SilentlyContinue
 
+        # Abaikan WindowsApps dummy shims (seperti python.exe redirector ke Microsoft Store)
+        if ($foundCmd -and $foundCmd.Source -like "*\Microsoft\WindowsApps\*") {
+            $allCmds = Get-Command $cmdName -All -ErrorAction SilentlyContinue | Where-Object { $_.Source -notlike "*\Microsoft\WindowsApps\*" }
+            $foundCmd = if ($allCmds) { $allCmds[0] } else { $null }
+        }
+
         if (-not $foundCmd) {
             $fallbackPath = Get-CustomCommandFallbackPath -CommandName $cmdName
             if ($fallbackPath -and (Test-Path -Path $fallbackPath)) {
@@ -92,11 +100,13 @@ function Get-PackageStatus {
 
         if ($foundCmd) {
             $vOutput = Get-CommandVersionOutput -CommandPath $foundCmd.Source -VerifyArgs $Package.verifyArgs
-            $result.InstalledVersion = if ($vOutput) { $vOutput } else { "CLI Terdeteksi" }
-            $result.TargetVersion = $result.InstalledVersion
-            $result.Status = "UP_TO_DATE"
-            $result.Details = "Terdeteksi via perintah CLI ($($foundCmd.Source))."
-            return $result
+            if ($vOutput -and $vOutput -notmatch "Python was not found" -and $vOutput -notmatch "Microsoft Store") {
+                $result.InstalledVersion = $vOutput
+                $result.TargetVersion = $result.InstalledVersion
+                $result.Status = "UP_TO_DATE"
+                $result.Details = "Terdeteksi via perintah CLI ($($foundCmd.Source))."
+                return $result
+            }
         }
     }
 
@@ -170,6 +180,12 @@ function Get-CommandVersionOutput {
         [void]$p.WaitForExit(2000)
 
         $output = if (-not [string]::IsNullOrWhiteSpace($stdout)) { $stdout } else { $stderr }
+
+        # Filter out WindowsApps stub redirect message
+        if ($output -match "Python was not found" -or $output -match "Microsoft Store") {
+            return $null
+        }
+
         $firstLine = ($output -split '\r?\n' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
 
         if ($firstLine) {
@@ -206,7 +222,7 @@ function Load-AllManifestPackages {
         }
     }
 
-    # Urutkan berdasarkan prioritas instalasi (Dependency ordering)
-    $sortedPackages = $allPackages | Sort-Object @{Expression={if ($_.priority) { [int]$_.priority } else { 99 }}}
+    # Urutkan berdasarkan prioritas instalasi (Dependency ordering, P0 s/d P15)
+    $sortedPackages = $allPackages | Sort-Object @{Expression={if ($null -ne $_.priority) { [int]$_.priority } else { 99 }}}
     return $sortedPackages
 }
