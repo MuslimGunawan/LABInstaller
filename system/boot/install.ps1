@@ -7,7 +7,18 @@
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# 1. Pengecekan Hak Akses Administrator
+# 1. Tangkap Lokasi Aktif Terminal Pemanggil
+$currentLocation = (Get-Location).ProviderPath
+if ([string]::IsNullOrWhiteSpace($currentLocation)) {
+    $currentLocation = (Get-Location).Path
+}
+
+# Jika diteruskan dari proses elevasi sebelumnya via variabel environment
+if ($env:LAB_TARGET_DIR -and (Test-Path -Path $env:LAB_TARGET_DIR)) {
+    $currentLocation = $env:LAB_TARGET_DIR
+}
+
+# 2. Pengecekan Hak Akses Administrator
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if (-not $isAdmin) {
@@ -15,12 +26,20 @@ if (-not $isAdmin) {
     Write-Host "==================================================================" -ForegroundColor Yellow
     Write-Host " [PERHATIAN] LABInstaller Memerlukan Hak Administrator!" -ForegroundColor Yellow
     Write-Host " Membuka jendela PowerShell Administrator baru..." -ForegroundColor Cyan
+    Write-Host " Lokasi Target: $currentLocation" -ForegroundColor DarkGray
     Write-Host "==================================================================" -ForegroundColor Yellow
     Write-Host ""
     
-    $elevateCommand = "irm 'https://raw.githubusercontent.com/MuslimGunawan/LABInstaller/main/system/boot/install.ps1?$([Guid]::NewGuid())' | iex"
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$elevateCommand`"" -Verb RunAs
+    $elevateCommand = "`$env:LAB_TARGET_DIR = '$currentLocation'; Set-Location -LiteralPath '$currentLocation'; irm 'https://raw.githubusercontent.com/MuslimGunawan/LABInstaller/main/system/boot/install.ps1?$([Guid]::NewGuid())' | iex"
+    Start-Process powershell.exe -WorkingDirectory "$currentLocation" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$elevateCommand`"" -Verb RunAs
     exit
+}
+
+# 3. Tentukan Lokasi Instalasi Berdasarkan Direktori Terminal Aktif
+if ((Split-Path -Leaf $currentLocation) -ieq "LABInstaller" -or (Test-Path -Path (Join-Path -Path $currentLocation -ChildPath "installer.ps1"))) {
+    $installDir = $currentLocation
+} else {
+    $installDir = Join-Path -Path $currentLocation -ChildPath "LABInstaller"
 }
 
 Clear-Host
@@ -32,11 +51,11 @@ Write-Host "  | |___ / ___ \| |_) || || | | \__ \ || (_| | | |  __/ |     " -For
 Write-Host "  |_____/_/   \_\____/|___|_| |_|___/\__\__,_|_|_|\___|_|     " -ForegroundColor Cyan
 Write-Host "==================================================================" -ForegroundColor Cyan
 Write-Host "  LABInstaller One-Line Bootstrapper untuk PC Lab Komputer" -ForegroundColor White
-Write-Host "  Target Instalasi: C:\LABInstaller" -ForegroundColor DarkGray
+Write-Host "  Lokasi Terminal  : $currentLocation" -ForegroundColor DarkGray
+Write-Host "  Target Direktori : $installDir" -ForegroundColor Yellow
 Write-Host "==================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-$installDir = "C:\LABInstaller"
 $zipUrl = "https://github.com/MuslimGunawan/LABInstaller/archive/refs/heads/main.zip"
 $tempZip = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "labinstaller_boot_$([Guid]::NewGuid().ToString('N')).zip"
 $tempExtract = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "labinstaller_ext_$([Guid]::NewGuid().ToString('N'))"
@@ -66,7 +85,7 @@ try {
         New-Item -ItemType Directory -Path $installDir -Force | Out-Null
     }
 
-    # Salin berkas ke C:\LABInstaller
+    # Salin berkas ke direktori target yang dipilih
     $items = Get-ChildItem -Path $extractedRoot
     foreach ($item in $items) {
         Copy-Item -Path $item.FullName -Destination $installDir -Recurse -Force
@@ -96,7 +115,7 @@ try {
     Write-Host ""
     Start-Sleep -Seconds 1
 
-    # Jalankan installer.ps1 langsung
+    # Jalankan installer.ps1 langsung di direktori yang baru diinstall
     $entryScript = Join-Path -Path $installDir -ChildPath "installer.ps1"
     Set-Location -Path $installDir
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $entryScript
@@ -116,4 +135,3 @@ finally {
         Remove-Item -Path $tempExtract -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
-

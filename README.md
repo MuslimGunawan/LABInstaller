@@ -57,7 +57,7 @@ irm "https://raw.githubusercontent.com/MuslimGunawan/LABInstaller/main/system/bo
 > **Apa yang terjadi secara otomatis?**
 > 1. Meminta hak akses Administrator jika belum aktif.
 > 2. Mengunduh paket LABInstaller terbaru langsung dari GitHub.
-> 3. Memasang sistem di `C:\LABInstaller` dan membuat shortcut di Desktop Publik.
+> 3. Memasang sistem secara dinamis di lokasi terminal yang sedang aktif (misal di Desktop, drive D:\, dll) dan membuat shortcut di Desktop Publik.
 > 4. Langsung membuka menu **Instalasi Pintar**.
 
 ---
