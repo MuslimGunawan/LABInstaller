@@ -1,10 +1,41 @@
 [
   {
+    "id": "7zip.7zip",
+    "name": "7-Zip",
+    "category": "Archive Utility",
+    "type": "hybrid",
+    "priority": 1,
+    "wingetId": "7zip.7zip",
+    "registryPattern": "7-Zip",
+    "pathCheck": "C:\\Program Files\\7-Zip\\7z.exe",
+    "directUrl": "https://www.7-zip.org/a/7z2409-x64.exe",
+    "directArgs": "/S",
+    "installType": "exe",
+    "fileName": "7z2409-x64.exe",
+    "description": "Pengarsip berkas berkinerja tinggi. Wajib terpasang di awal untuk ekstraksi paket RAR & ZIP."
+  },
+  {
+    "id": "RARLab.WinRAR",
+    "name": "WinRAR (Licensed Edition)",
+    "category": "Archive Utility",
+    "type": "hybrid",
+    "priority": 2,
+    "wingetId": "RARLab.WinRAR",
+    "registryPattern": "WinRAR",
+    "pathCheck": "C:\\Program Files\\WinRAR\\WinRAR.exe",
+    "directUrl": "https://www.win-rar.com/fileadmin/winrar-versions/winrar/winrar-x64-701.exe",
+    "directArgs": "/s",
+    "installType": "exe",
+    "fileName": "winrar-x64-701.exe",
+    "postInstallHandler": "Setup-WinRarLicense",
+    "description": "Perangkat lunak pengarsip RAR & ZIP resmi lengkap dengan aktivasi otomatis Unlimited Company License."
+  },
+  {
     "id": "Microsoft.VisualStudioCode",
     "name": "Visual Studio Code",
     "category": "Code Editor & IDE",
     "type": "hybrid",
-    "priority": 11,
+    "priority": 13,
     "wingetId": "Microsoft.VisualStudioCode",
     "registryPattern": "(Visual Studio Code|VS Code)",
     "verifyCommand": "code",
@@ -12,6 +43,7 @@
     "directUrl": "https://update.code.visualstudio.com/latest/win32-x64-user/stable",
     "directArgs": "/VERYSILENT /NORESTART /MERGETASKS=\"!runcode,desktopicon,addcontextmenufiles,addcontextmenufolders,associatewithfiles,addtopath\"",
     "installType": "exe",
+    "fileName": "VSCodeSetup-x64.exe",
     "description": "Editor kode resmi dari Microsoft dengan dukungan ekstensi lengkap."
   },
   {
@@ -19,13 +51,14 @@
     "name": "Apache NetBeans IDE",
     "category": "Java & Polyglot IDE",
     "type": "hybrid",
-    "priority": 12,
+    "priority": 14,
     "wingetId": "Apache.NetBeans",
     "registryPattern": "NetBeans",
     "pathCheck": "C:\\Program Files\\NetBeans*\\bin\\netbeans64.exe",
     "directUrl": "https://archive.apache.org/dist/netbeans/netbeans-installers/25/Apache-NetBeans-25-bin-windows-x64.exe",
     "directArgs": "--silent",
     "installType": "exe",
+    "fileName": "Apache-NetBeans-25-bin-windows-x64.exe",
     "description": "IDE resmi Apache untuk pengembangan Java, PHP, HTML5, dan C/C++."
   },
   {
@@ -33,13 +66,14 @@
     "name": "Arduino IDE",
     "category": "Embedded & IoT IDE",
     "type": "hybrid",
-    "priority": 13,
+    "priority": 15,
     "wingetId": "ArduinoSA.IDE.stable",
     "registryPattern": "Arduino",
     "pathCheck": "C:\\Program Files\\Arduino IDE\\Arduino IDE.exe",
     "directUrl": "https://github.com/arduino/arduino-ide/releases/download/2.3.4/arduino-ide_2.3.4_Windows_64bit.msi",
     "directArgs": "/qn",
     "installType": "msi",
+    "fileName": "arduino-ide_2.3.4_Windows_64bit.msi",
     "description": "IDE resmi dari Arduino SA untuk pemrograman mikrokontroler dan board IoT."
   },
   {
@@ -47,7 +81,7 @@
     "name": "Google Chrome",
     "category": "Web Browser",
     "type": "hybrid",
-    "priority": 14,
+    "priority": 16,
     "wingetId": "Google.Chrome",
     "registryPattern": "Google Chrome",
     "pathCheck": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -56,36 +90,46 @@
     "directUrl": "https://dl.google.com/chrome/install/latest/chrome_installer.exe",
     "directArgs": "/silent /install",
     "installType": "exe",
+    "fileName": "chrome_installer.exe",
     "description": "Browser web resmi dari Google untuk kebutuhan browsing dan web development."
   },
   {
     "id": "Oracle.VirtualBox",
-    "name": "Oracle VirtualBox",
+    "name": "Oracle VirtualBox & Extension Pack",
     "category": "Virtualization",
     "type": "hybrid",
-    "priority": 15,
+    "priority": 17,
     "wingetId": "Oracle.VirtualBox",
     "registryPattern": "VirtualBox",
     "pathCheck": "C:\\Program Files\\Oracle\\VirtualBox\\VirtualBox.exe",
     "verifyCommand": "VBoxManage",
     "verifyArgs": ["--version"],
+    "gdriveMirrors": [
+      "18VMaCMVlP5-1yoUU0e90Bjy3pqUzqV8i",
+      "1O0GSKjOzYf7b5cC5hlIsa10ouzMtrS7D",
+      "1yR9Xc2bRcEwQBz7o3IrMZ0Ustx5jd5fI",
+      "1FqHbWQdaRxOoO0woLB-UZjlXFeWJ5VnA"
+    ],
+    "fileName": "VirtualBox-7.2.20-175154-Win.exe",
     "directUrl": "https://download.virtualbox.org/virtualbox/7.0.20/VirtualBox-7.0.20-163906-Win.exe",
     "directArgs": "--silent",
     "installType": "exe",
-    "description": "Perangkat lunak virtualisasi open-source untuk menjalankan OS di lingkungan virtual."
+    "postInstallHandler": "Setup-VirtualBoxExtPack",
+    "description": "Perangkat lunak virtualisasi open-source lengkap dengan Extension Pack (USB 3.0, RDP, enkripsi)."
   },
   {
     "id": "Google.AndroidStudio",
     "name": "Android Studio",
     "category": "Mobile App IDE",
     "type": "hybrid",
-    "priority": 16,
+    "priority": 18,
     "wingetId": "Google.AndroidStudio",
     "registryPattern": "Android Studio",
     "pathCheck": "C:\\Program Files\\Android\\Android Studio\\bin\\studio64.exe",
     "directUrl": "https://redirector.gvt1.com/edgedl/android/studio/install/2024.2.1.11/android-studio-2024.2.1.11-windows.exe",
     "directArgs": "/S",
     "installType": "exe",
+    "fileName": "android-studio-windows.exe",
     "description": "IDE resmi Google untuk pengembangan aplikasi Android dan Flutter/Kotlin."
   },
   {
@@ -93,21 +137,47 @@
     "name": "QGIS Desktop",
     "category": "Geographic Information System",
     "type": "hybrid",
-    "priority": 17,
+    "priority": 19,
     "wingetId": "OSGeo.QGIS",
     "registryPattern": "QGIS",
     "pathCheck": "C:\\Program Files\\QGIS *\\bin\\qgis-bin.exe",
+    "gdriveMirrors": [
+      "1j2ni6VxI8w4We73Ktwo6q-ZGf3AVaKSf",
+      "1M94aEgIA2-vm_6sDLvNt8NjxnDKi_64F",
+      "1bZLML-jzJSAVz1FX2JZOJierPENvOvdn",
+      "1jIpBpvowlyvVifhfVnY1HhIlKYpMtacR"
+    ],
+    "fileName": "QGIS-OSGeo4W-4.2.2-1.msi",
     "directUrl": "https://download.qgis.org/downloads/QGIS-OSGeo4W-3.34.14-1.msi",
     "directArgs": "/qn /norestart",
     "installType": "msi",
-    "description": "Aplikasi Sistem Informasi Geografis (SIG/GIS) open-source untuk pemetaan dan spasial."
+    "description": "Aplikasi Sistem Informasi Geografis (SIG/GIS) open-source untuk pemetaan dan analisis spasial."
+  },
+  {
+    "id": "Cisco.PacketTracer",
+    "name": "Cisco Packet Tracer 9",
+    "category": "Networking Simulation",
+    "type": "hybrid",
+    "priority": 20,
+    "registryPattern": "Packet Tracer",
+    "pathCheck": "C:\\Program Files\\Cisco Packet Tracer *\\bin\\PacketTracer.exe",
+    "gdriveMirrors": [
+      "1N_YQNs2xFrdFGRPs4kqgF6LGOYDp37ZK",
+      "1O4flOVt7G-xZmfJSlxP3aLjTj1JM_LYP",
+      "1SeGZ7TGze27bs6d7FJd4nNDW_D8QIj2c",
+      "1YbIfp1OyVXl_uksvGu7w82KcHB4_UpR-"
+    ],
+    "fileName": "CiscoPacketTracer_901_win_64bit.rar",
+    "directArgs": "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES",
+    "installType": "rar",
+    "description": "Simulator jaringan resmi Cisco untuk praktikum konfigurasi router, switch, dan topologi Lab."
   },
   {
     "id": "Microsoft.VisualStudio.2022.Community",
     "name": "Visual Studio Community 2022 (C++ Desktop Dev)",
     "category": "Native C/C++ IDE",
     "type": "hybrid",
-    "priority": 18,
+    "priority": 21,
     "wingetId": "Microsoft.VisualStudio.2022.Community",
     "registryPattern": "(Visual Studio Community 2022|Microsoft Visual Studio)",
     "pathCheck": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\devenv.exe",
@@ -115,6 +185,7 @@
     "directUrl": "https://aka.ms/vs/17/release/vs_community.exe",
     "directArgs": "--add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended --passive --norestart",
     "installType": "exe",
+    "fileName": "vs_community.exe",
     "description": "IDE resmi Microsoft lengkap dengan workload Desktop development with C++ untuk praktikum Lab."
   }
 ]

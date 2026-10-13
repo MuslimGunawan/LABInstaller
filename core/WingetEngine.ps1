@@ -92,6 +92,111 @@ function Install-WingetAutoBootstrap {
     return $false
 }
 
+function Get-AppStorageDirectory {
+    $scriptRoot = Split-Path -Parent $PSScriptRoot
+    $appsDir = Join-Path -Path $scriptRoot -ChildPath "apps"
+    if (-not (Test-Path -Path $appsDir)) {
+        New-Item -ItemType Directory -Path $appsDir -Force | Out-Null
+    }
+    return $appsDir
+}
+
+function Invoke-GoogleDriveFileDownload {
+    param (
+        [string]$FileId,
+        [string]$OutPath
+    )
+
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $cookieContainer = New-Object System.Net.CookieContainer
+
+        $url = "https://drive.google.com/uc?export=download&id=$FileId"
+        $req = [System.Net.HttpWebRequest]::Create($url)
+        $req.CookieContainer = $cookieContainer
+        $req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) LABInstaller"
+        $req.AllowAutoRedirect = $true
+        
+        $resp = $req.GetResponse()
+        $ct = $resp.ContentType
+
+        if ($ct -notmatch "text/html") {
+            $stream = $resp.GetResponseStream()
+            $fs = [System.IO.File]::Create($OutPath)
+            $stream.CopyTo($fs)
+            $fs.Close(); $stream.Close(); $resp.Close()
+            return ((Test-Path $OutPath) -and ((Get-Item $OutPath).Length -gt 1000))
+        }
+
+        $sr = New-Object System.IO.StreamReader($resp.GetResponseStream())
+        $html = $sr.ReadToEnd()
+        $sr.Close(); $resp.Close()
+
+        $confirm = if ($html -match 'name="confirm"\s+value="([^"]+)"') { $matches[1] } else { "t" }
+        $uuid = if ($html -match 'name="uuid"\s+value="([^"]+)"') { $matches[1] } else { "" }
+
+        # Unduh melalui endpoint konten resmi
+        $dlUrl = "https://drive.usercontent.google.com/download?id=$FileId&export=download&confirm=$confirm"
+        if ($uuid) {
+            $dlUrl += "&uuid=$uuid"
+        }
+
+        $req2 = [System.Net.HttpWebRequest]::Create($dlUrl)
+        $req2.CookieContainer = $cookieContainer
+        $req2.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) LABInstaller"
+        $req2.AllowAutoRedirect = $true
+
+        $resp2 = $req2.GetResponse()
+        $stream2 = $resp2.GetResponseStream()
+        $fs = [System.IO.File]::Create($OutPath)
+        $stream2.CopyTo($fs)
+        $fs.Close(); $stream2.Close(); $resp2.Close()
+
+        return ((Test-Path $OutPath) -and ((Get-Item $OutPath).Length -gt 1000))
+    }
+    catch {
+        return $false
+    }
+}
+
+function Invoke-GoogleDriveMultiMirrorDownload {
+    param (
+        [string[]]$MirrorIds,
+        [string]$DestinationPath,
+        [string]$AppName = "Aplikasi"
+    )
+
+    if (Test-Path -Path $DestinationPath) {
+        $existingSize = (Get-Item -Path $DestinationPath).Length
+        if ($existingSize -gt 100000) { # Lebih dari 100 KB
+            Write-LogSuccess "Berkas installer $AppName sudah tersedia di penyimpanan lokal (Cache): $DestinationPath ($([math]::Round($existingSize/1MB, 2)) MB)."
+            return $true
+        }
+    }
+
+    $mirrorNum = 1
+    foreach ($mId in $MirrorIds) {
+        if ([string]::IsNullOrWhiteSpace($mId)) { continue }
+        Write-LogInfo "Mencoba mengunduh $AppName dari Google Drive [Mirror #$mirrorNum (ID: $mId)]..."
+
+        $dlSuccess = Invoke-GoogleDriveFileDownload -FileId $mId -OutPath $DestinationPath
+        if ($dlSuccess -and (Test-Path -Path $DestinationPath) -and (Get-Item -Path $DestinationPath).Length -gt 100000) {
+            $mb = [math]::Round((Get-Item -Path $DestinationPath).Length / 1MB, 2)
+            Write-LogSuccess "Berhasil mengunduh $AppName dari Google Drive Mirror #$mirrorNum ($mb MB)!"
+            return $true
+        } else {
+            Write-LogWarning "Mirror #$mirrorNum gagal atau kuota unduh Google Drive tercapai. Mencoba mirror cadangan berikutnya..."
+            if (Test-Path -Path $DestinationPath) {
+                Remove-Item -Path $DestinationPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+        $mirrorNum++
+    }
+
+    Write-LogWarning "Seluruh mirror Google Drive untuk $AppName tidak dapat diakses atau limit. Mengalihkan ke server tercepat vendor..."
+    return $false
+}
+
 function Invoke-PackageInstall {
     param (
         [Parameter(Mandatory=$true)]
@@ -114,7 +219,26 @@ function Invoke-PackageInstall {
         }
     }
 
-    # 2. Jalur Winget (Jika Winget sehat dan paket memiliki wingetId)
+    # 2. Jalur Google Drive Mirror (Prioritas Utama Pengguna: Cepat & Hemat Kuota)
+    $appsDir = Get-AppStorageDirectory
+    if ($Package.gdriveMirrors -and $Package.gdriveMirrors.Count -gt 0) {
+        $targetFileName = if ($Package.fileName) { $Package.fileName } else { "installer_$($Package.id).exe" }
+        $gdriveLocalFile = Join-Path -Path $appsDir -ChildPath $targetFileName
+
+        Write-LogInfo "Memprioritaskan pengunduhan dari Google Drive Mirror resmi..."
+        $gdriveDownloaded = Invoke-GoogleDriveMultiMirrorDownload -MirrorIds $Package.gdriveMirrors -DestinationPath $gdriveLocalFile -AppName $pkgName
+
+        if ($gdriveDownloaded -and (Test-Path -Path $gdriveLocalFile)) {
+            Write-LogInfo "Menjalankan instalasi dari paket Google Drive ($targetFileName)..."
+            $installed = Install-LocalFilePackage -Package $Package -FilePath $gdriveLocalFile
+            if ($installed) {
+                return $true
+            }
+            Write-LogWarning "Gagal memasang dari paket Google Drive lokal. Mencoba metode alternatif..."
+        }
+    }
+
+    # 3. Jalur Winget (Jika Winget sehat dan paket memiliki wingetId)
     $wingetHealthy = Test-WingetHealth
     if ($wingetHealthy -and -not [string]::IsNullOrWhiteSpace($Package.wingetId)) {
         Write-LogInfo "Mencoba instalasi via Microsoft WinGet..."
@@ -128,7 +252,7 @@ function Invoke-PackageInstall {
         Write-LogInfo "WinGet tidak aktif pada OS ini. Menggunakan mesin unduhan langsung vendor..."
     }
 
-    # 3. Jalur Fallback Unduhan Langsung Vendor (Bulletproof Direct Fallback)
+    # 4. Jalur Fallback Unduhan Langsung Vendor (Bulletproof Direct Fallback)
     if (-not [string]::IsNullOrWhiteSpace($Package.directUrl)) {
         $directSuccess = Invoke-DirectInstaller -Package $Package
         return $directSuccess
@@ -189,6 +313,92 @@ function Invoke-WingetInstall {
     }
 }
 
+function Install-LocalFilePackage {
+    param (
+        [Parameter(Mandatory=$true)]
+        [PSCustomObject]$Package,
+        [string]$FilePath
+    )
+
+    $pkgName = $Package.name
+    $ext = [System.IO.Path]::GetExtension($FilePath).ToLower()
+    $appsDir = Get-AppStorageDirectory
+
+    try {
+        if ($ext -eq ".msi") {
+            Write-LogInfo "Memasang paket MSI: $FilePath..."
+            $msiArgs = "/i `"$FilePath`" $($Package.directArgs) /norestart"
+            $p = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArgs -NoNewWindow -Wait -PassThru
+            if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
+                Write-LogSuccess "$pkgName berhasil dipasang via MSI."
+                Refresh-CurrentSessionEnvironment
+                return $true
+            } else {
+                Write-LogError "Pemasangan MSI gagal dengan kode keluar: $($p.ExitCode)"
+                return $false
+            }
+        }
+        elseif ($ext -eq ".exe") {
+            Write-LogInfo "Memasang paket EXE: $FilePath..."
+            $p = Start-Process -FilePath $FilePath -ArgumentList $Package.directArgs -NoNewWindow -Wait -PassThru
+            if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
+                Write-LogSuccess "$pkgName berhasil dipasang via EXE."
+                Refresh-CurrentSessionEnvironment
+                return $true
+            } else {
+                if ($Package.id -eq "Google.Chrome" -and (Test-Path "C:\Program Files\Google\Chrome\Application\chrome.exe")) {
+                    Write-LogSuccess "$pkgName berhasil dipasang."
+                    return $true
+                }
+                Write-LogError "Pemasangan EXE gagal dengan kode keluar: $($p.ExitCode)"
+                return $false
+            }
+        }
+        elseif ($ext -eq ".rar") {
+            Write-LogInfo "Mengekstrak paket RAR: $FilePath menggunakan 7-Zip..."
+            $extractDir = Join-Path -Path $appsDir -ChildPath "$($Package.id)_extracted"
+            if (-not (Test-Path $extractDir)) { New-Item -ItemType Directory -Path $extractDir -Force | Out-Null }
+            
+            $sevenZipExe = "C:\Program Files\7-Zip\7z.exe"
+            if (-not (Test-Path $sevenZipExe)) {
+                $sevenZipCmd = Get-Command "7z.exe" -ErrorAction SilentlyContinue
+                if ($sevenZipCmd) { $sevenZipExe = $sevenZipCmd.Source }
+            }
+
+            if (Test-Path $sevenZipExe) {
+                Start-Process -FilePath $sevenZipExe -ArgumentList "x `"$FilePath`" -o`"$extractDir`" -y" -NoNewWindow -Wait
+                $setupExe = Get-ChildItem -Path $extractDir -Recurse -Filter "*.exe" | Select-Object -First 1
+                if ($setupExe) {
+                    Write-LogInfo "Menjalankan installer yang diekstrak: $($setupExe.FullName)..."
+                    $p = Start-Process -FilePath $setupExe.FullName -ArgumentList $Package.directArgs -NoNewWindow -Wait -PassThru
+                    if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
+                        Write-LogSuccess "$pkgName berhasil dipasang!"
+                        Refresh-CurrentSessionEnvironment
+                        return $true
+                    }
+                }
+            } else {
+                Write-LogError "7-Zip diperlukan untuk mengekstrak berkas .rar. Pastikan 7-Zip terpasang terlebih dahulu."
+            }
+            return $false
+        }
+        elseif ($ext -eq ".zip") {
+            $destDir = if ($Package.extractDir) { $Package.extractDir } else { "C:\tools\$($Package.id)" }
+            Write-LogInfo "Mengekstrak paket ZIP ke $destDir..."
+            Expand-Archive -Path $FilePath -DestinationPath $destDir -Force
+            Add-DirectoryToPath -PathToAdd $destDir -Scope "Machine" | Out-Null
+            Write-LogSuccess "$pkgName berhasil diekstrak dan didaftarkan ke sistem PATH."
+            Refresh-CurrentSessionEnvironment
+            return $true
+        }
+        return $false
+    }
+    catch {
+        Write-LogError "Gagal memasang paket $pkgName dari berkas lokal: $_"
+        return $false
+    }
+}
+
 function Invoke-DirectInstaller {
     param (
         [Parameter(Mandatory=$true)]
@@ -198,8 +408,18 @@ function Invoke-DirectInstaller {
     $pkgName = $Package.name
     $url = $Package.directUrl
     $type = if ($Package.installType) { $Package.installType.ToLower() } else { "exe" }
-    $tempDir = [System.IO.Path]::GetTempPath()
-    $localFile = Join-Path -Path $tempDir -ChildPath "labinst_$($Package.id -replace '[^a-zA-Z0-9]','_').$type"
+    $appsDir = Get-AppStorageDirectory
+    $fileName = if ($Package.fileName) { $Package.fileName } else { "labinst_$($Package.id -replace '[^a-zA-Z0-9]','_').$type" }
+    $localFile = Join-Path -Path $appsDir -ChildPath $fileName
+
+    # Gunakan cache lokal jika file sudah ada dan ukurannya valid
+    if (Test-Path -Path $localFile) {
+        $existLen = (Get-Item -Path $localFile).Length
+        if ($existLen -gt 100000) {
+            Write-LogSuccess "Berkas installer $pkgName sudah tersedia di folder apps (Cache): $localFile"
+            return (Install-LocalFilePackage -Package $Package -FilePath $localFile)
+        }
+    }
 
     Write-LogStep "Mengunduh langsung installer resmi $pkgName..."
     Write-LogInfo "Sumber Vendor: $url"
@@ -207,7 +427,7 @@ function Invoke-DirectInstaller {
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         $wc = New-Object System.Net.WebClient
-        $wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) LABInstaller/1.0.3")
+        $wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) LABInstaller/1.0.6")
 
         # Unduh dengan retry hingga 2 kali
         $downloadSuccess = $false
@@ -229,57 +449,10 @@ function Invoke-DirectInstaller {
             throw "Gagal mengunduh berkas installer dari tautan vendor."
         }
 
-        # Eksekusi Instalasi Berdasarkan Tipe Berkas
-        if ($type -eq "zip") {
-            $destDir = if ($Package.extractDir) { $Package.extractDir } else { "C:\tools\$($Package.id)" }
-            Write-LogInfo "Mengekstrak paket zip ke: $destDir..."
-            if (-not (Test-Path -Path $destDir)) {
-                New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-            }
-            Expand-Archive -Path $localFile -DestinationPath $destDir -Force
-            Add-DirectoryToPath -PathToAdd $destDir -Scope "Machine" | Out-Null
-            Write-LogSuccess "$pkgName berhasil diekstrak dan didaftarkan ke sistem PATH."
-            Refresh-CurrentSessionEnvironment
-            return $true
-        }
-        elseif ($type -eq "msi") {
-            Write-LogInfo "Menjalankan msiexec secara silent..."
-            $msiArgs = "/i `"$localFile`" $($Package.directArgs) /norestart"
-            $p = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArgs -NoNewWindow -Wait -PassThru
-            if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
-                Write-LogSuccess "$pkgName berhasil dipasang via MSI installer resmi."
-                Refresh-CurrentSessionEnvironment
-                return $true
-            } else {
-                Write-LogError "Pemasangan MSI gagal dengan kode keluar: $($p.ExitCode)"
-                return $false
-            }
-        }
-        else { # EXE
-            Write-LogInfo "Menjalankan installer EXE secara silent..."
-            $p = Start-Process -FilePath $localFile -ArgumentList $Package.directArgs -NoNewWindow -Wait -PassThru
-            if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
-                Write-LogSuccess "$pkgName berhasil dipasang via EXE installer resmi."
-                Refresh-CurrentSessionEnvironment
-                return $true
-            } else {
-                # Beberapa installer seperti Chrome mengembalikan kode keluar tertentu saat sukses
-                if ($Package.id -eq "Google.Chrome" -and (Test-Path "C:\Program Files\Google\Chrome\Application\chrome.exe")) {
-                    Write-LogSuccess "$pkgName berhasil dipasang (Chrome terdeteksi)."
-                    return $true
-                }
-                Write-LogError "Installer EXE selesai dengan kode keluar: $($p.ExitCode)"
-                return $false
-            }
-        }
+        return (Install-LocalFilePackage -Package $Package -FilePath $localFile)
     }
     catch {
         Write-LogError "Gagal memasang $pkgName via Direct Installer - $_"
         return $false
-    }
-    finally {
-        if (Test-Path -Path $localFile) {
-            Remove-Item -Path $localFile -Force -ErrorAction SilentlyContinue
-        }
     }
 }

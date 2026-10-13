@@ -4,29 +4,36 @@
     "name": "Laragon WAMP Custom Lab Suite",
     "category": "Web Server Environment",
     "type": "custom",
-    "priority": 9,
+    "priority": 11,
     "registryPattern": "Laragon",
     "pathCheck": "C:\\laragon\\laragon.exe",
-    "gdriveId": "GDRIVE_FILE_ID_HERE",
+    "gdriveMirrors": [
+      "1Nmy4yx8o8ddednr-DV6EJ5Gi6ukUWTaN",
+      "16amKlAlav5lhydHcvjoVmTPQ3w8rLCkm",
+      "1bbM4aMQbZcC-XyJNkU-36R6x8Wy2dbjp",
+      "1qDaAbmCs0R850Z8bfm0zpqBLx-DhMH08"
+    ],
+    "fileName": "Laragon_Custom_LAB.zip",
     "directUrl": "https://github.com/leokhoa/laragon/releases/download/6.0.0/laragon-wamp.exe",
     "directArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=\"C:\\laragon\"",
     "installType": "exe",
     "customHandler": "Install-LaragonCustomSuite",
     "postInstallHandler": "Setup-LaragonEnvironment",
-    "description": "Paket Laragon Custom Lab Komputer (PHP 8.5/8.4, MySQL 9/8, Apache, Nginx, phpMyAdmin Auto-login root, bebas warning & siap pakai)."
+    "description": "Paket Laragon Custom Lab Komputer (Setup Resmi 6.0.0 + Overlay PHP 8.5/8.4, MySQL 9/8, phpMyAdmin Auto-login root bebas warning)."
   },
   {
     "id": "ApacheFriends.Xampp.8.2",
     "name": "XAMPP 8.2",
     "category": "Web Server Environment",
     "type": "hybrid",
-    "priority": 10,
+    "priority": 12,
     "wingetId": "ApacheFriends.Xampp.8.2",
     "registryPattern": "XAMPP",
     "pathCheck": "C:\\xampp\\xampp-control.exe",
     "directUrl": "https://sourceforge.net/projects/xampp/files/XAMPP%20Windows/8.2.12/xampp-windows-x64-8.2.12-0-VS16-installer.exe/download",
     "directArgs": "--mode unattended",
     "installType": "exe",
+    "fileName": "xampp-windows-x64-8.2.12-installer.exe",
     "postInstallHandler": "Setup-XamppEnvironment",
     "description": "Distribusi Apache, MariaDB, PHP, dan Perl dari Apache Friends (Port otomatis disesuaikan agar tidak bentrok dengan Laragon)."
   }

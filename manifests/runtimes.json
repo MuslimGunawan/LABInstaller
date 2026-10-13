@@ -17,7 +17,7 @@
     "name": "Git for Windows",
     "category": "Version Control",
     "type": "hybrid",
-    "priority": 1,
+    "priority": 3,
     "wingetId": "Git.Git",
     "registryPattern": "Git (version|for Windows)",
     "pathCheck": "C:\\Program Files\\Git\\cmd\\git.exe",
@@ -26,6 +26,7 @@
     "directUrl": "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.1/Git-2.47.1-64-bit.exe",
     "directArgs": "/VERYSILENT /NORESTART /NOCANCEL /SP-",
     "installType": "exe",
+    "fileName": "Git-2.47.1-64-bit.exe",
     "description": "Sistem kontrol versi resmi terdistribusi untuk melacak perubahan kode sumber."
   },
   {
@@ -33,7 +34,7 @@
     "name": "Java SDK (Temurin OpenJDK 21 LTS)",
     "category": "SDK & Runtime",
     "type": "hybrid",
-    "priority": 2,
+    "priority": 4,
     "wingetId": "EclipseAdoptium.Temurin.21.JDK",
     "registryPattern": "(Temurin|OpenJDK|Java.*Development Kit)",
     "pathCheck": "C:\\Program Files\\Eclipse Adoptium\\jdk-*\\bin\\java.exe",
@@ -42,6 +43,7 @@
     "directUrl": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.5%2B11/OpenJDK21U-jdk_x64_windows_hotspot_21.0.5_11.msi",
     "directArgs": "/qn ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome",
     "installType": "msi",
+    "fileName": "OpenJDK21U-jdk_x64_windows.msi",
     "postInstallHandler": "Setup-JavaEnvironment",
     "description": "Java Development Kit (JDK) resmi dengan dukungan LTS. Wajib untuk NetBeans & Android/Flutter."
   },
@@ -50,7 +52,7 @@
     "name": "Python 3.12",
     "category": "Programming Runtime",
     "type": "hybrid",
-    "priority": 3,
+    "priority": 5,
     "wingetId": "Python.Python.3.12",
     "registryPattern": "Python 3\\.",
     "installOverride": "/passive InstallAllUsers=1 PrependPath=1",
@@ -59,6 +61,7 @@
     "directUrl": "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe",
     "directArgs": "/passive InstallAllUsers=1 PrependPath=1",
     "installType": "exe",
+    "fileName": "python-3.12.8-amd64.exe",
     "postInstallHandler": "Setup-PythonEnvironment",
     "description": "Bahasa pemrograman tingkat tinggi untuk AI, scripting, dan backend development."
   },
@@ -67,7 +70,7 @@
     "name": "Node.js (LTS)",
     "category": "Frontend & JS Runtime",
     "type": "hybrid",
-    "priority": 4,
+    "priority": 6,
     "wingetId": "OpenJS.NodeJS.LTS",
     "registryPattern": "Node\\.js",
     "pathCheck": "C:\\Program Files\\nodejs\\node.exe",
@@ -76,6 +79,7 @@
     "directUrl": "https://nodejs.org/dist/v22.12.0/node-v22.12.0-x64.msi",
     "directArgs": "/qn",
     "installType": "msi",
+    "fileName": "node-v22.12.0-x64.msi",
     "description": "JavaScript runtime resmi untuk Vite, NPM, dan kompilasi frontend modern Laravel."
   },
   {
@@ -83,13 +87,14 @@
     "name": "PHP 8.5",
     "category": "Backend Runtime",
     "type": "hybrid",
-    "priority": 5,
+    "priority": 7,
     "wingetId": "PHP.PHP.8.5",
     "registryPattern": "PHP 8\\.",
     "verifyCommand": "php",
     "verifyArgs": ["-v"],
     "directUrl": "https://downloads.php.net/~windows/releases/archives/php-8.5.10-Win32-vs17-x64.zip",
     "installType": "zip",
+    "fileName": "php-8.5.10-Win32-vs17-x64.zip",
     "extractDir": "C:\\tools\\php85",
     "postInstallHandler": "Setup-PhpEnvironment",
     "description": "PHP 8.5 versi resmi thread-safe untuk kebutuhan web development modern dan Laravel."

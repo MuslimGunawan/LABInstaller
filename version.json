@@ -1,7 +1,7 @@
 {
-  "version": "1.0.6",
+  "version": "1.0.7",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-13",
-  "description": "v1.0.6: Fitur otomatis pembebasan Port 80 dari PID 4 (System / IIS / W3SVC / HTTP.sys) untuk Laragon"
+  "description": "v1.0.7: Multi-Mirror Google Drive download engine dengan fallback vendor/WinGet, integrasi 7-Zip & WinRAR teraktivasi (rarreg.key), Cisco Packet Tracer 9, Oracle VirtualBox + ExtPack, dan Laragon Custom Suite"
 }

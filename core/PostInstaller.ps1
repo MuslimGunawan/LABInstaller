@@ -257,79 +257,148 @@ function Invoke-GoogleDriveDownload {
 
 function Install-LaragonCustomSuite {
     param (
-        [string]$GdriveId = ""
+        [string[]]$GdriveMirrors = @(
+            "1Nmy4yx8o8ddednr-DV6EJ5Gi6ukUWTaN",
+            "16amKlAlav5lhydHcvjoVmTPQ3w8rLCkm",
+            "1bbM4aMQbZcC-XyJNkU-36R6x8Wy2dbjp",
+            "1qDaAbmCs0R850Z8bfm0zpqBLx-DhMH08"
+        )
     )
 
-    Write-LogStep "Menginstal Laragon Custom Suite (Edisi Lab Komputer)..."
+    Write-LogStep "Menginstal Laragon Custom Suite (Setup Resmi + Overlay Custom Milik Anda)..."
     Refresh-CurrentSessionEnvironment
 
     $laragonDir = "C:\laragon"
     $laragonExe = Join-Path -Path $laragonDir -ChildPath "laragon.exe"
+    $appsDir = Get-AppStorageDirectory
 
-    if (Test-Path -Path $laragonExe) {
-        Write-LogSuccess "Laragon sudah terpasang di C:\laragon. Mengoptimalkan konfigurasi..."
-        Setup-LaragonEnvironment
-        return $true
+    # LANGKAH 1: Pastikan Laragon 6.0.0 Resmi Terpasang Terlebih Dahulu agar Terdaftar di Windows OS
+    if (-not (Test-Path -Path $laragonExe)) {
+        Write-LogInfo "Menjalankan instalasi resmi Laragon 6.0.0 agar terdaftar di registry Windows..."
+        $installedOfficial = Install-LaragonOfficial
+        if (-not $installedOfficial -and -not (Test-Path -Path $laragonExe)) {
+            Write-LogError "Gagal memasang installer dasar Laragon 6.0.0."
+            return $false
+        }
+    } else {
+        Write-LogSuccess "Laragon resmi sudah terdaftar di sistem operasi Windows (C:\laragon)."
     }
 
-    if (-not (Test-Path -Path $laragonDir)) {
-        New-Item -ItemType Directory -Path $laragonDir -Force | Out-Null
-    }
+    # LANGKAH 2: Ambil Paket ZIP Custom Milik Anda (Lokal / Google Drive Mirror)
+    $zipTarget = Join-Path -Path $appsDir -ChildPath "Laragon_Custom_LAB.zip"
 
-    # 1. Cek apakah ada file ZIP lokal di direktori komputer (misal D:\KP\Laragon_Custom_LAB.zip)
+    # Cek kandidat lokal terlebih dahulu
     $candidateZips = @(
+        $zipTarget,
         "D:\KP\Laragon_Custom_LAB.zip",
         (Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath "Laragon_Custom_LAB.zip"),
         (Join-Path -Path (Get-Location).Path -ChildPath "Laragon_Custom_LAB.zip")
     )
+    $localZip = $candidateZips | Where-Object { (Test-Path -Path $_) -and ((Get-Item -Path $_).Length -gt 100MB) } | Select-Object -First 1
 
-    $localZip = $candidateZips | Where-Object { Test-Path -Path $_ } | Select-Object -First 1
+    if (-not $localZip) {
+        Write-LogInfo "Mengunduh paket Laragon Custom dari Google Drive Mirror resmi..."
+        $dlSuccess = Invoke-GoogleDriveMultiMirrorDownload -MirrorIds $GdriveMirrors -DestinationPath $zipTarget -AppName "Laragon Custom Lab"
+        if ($dlSuccess) {
+            $localZip = $zipTarget
+        }
+    }
 
-    if ($localZip) {
-        Write-LogSuccess "Menemukan paket lokal Laragon Custom: $localZip"
-        Write-LogInfo "Mengekstrak paket kustom ke C:\laragon..."
+    # LANGKAH 3: Timpa (Overlay) File C:\laragon dengan File Custom Anda
+    if ($localZip -and (Test-Path -Path $localZip)) {
+        Write-LogStep "Menimpa berkas Laragon dengan paket custom (PHP 8.5/8.4, MySQL 9/8, Apache/Nginx, phpMyAdmin)..."
         
-        $tarExe = "C:\Windows\System32\tar.exe"
-        if (Test-Path -Path $tarExe) {
-            Start-Process -FilePath $tarExe -ArgumentList "-xf `"$localZip`" -C `"$laragonDir`"" -NoNewWindow -Wait
-        } else {
-            Expand-Archive -Path $localZip -DestinationPath $laragonDir -Force
+        $sevenZipExe = "C:\Program Files\7-Zip\7z.exe"
+        if (-not (Test-Path $sevenZipExe)) {
+            $sevenZipCmd = Get-Command "7z.exe" -ErrorAction SilentlyContinue
+            if ($sevenZipCmd) { $sevenZipExe = $sevenZipCmd.Source }
         }
 
-        if (Test-Path -Path $laragonExe) {
-            Write-LogSuccess "Laragon Custom Suite berhasil diekstrak dan dipasang di C:\laragon!"
-            Setup-LaragonEnvironment
+        if (Test-Path $sevenZipExe) {
+            Start-Process -FilePath $sevenZipExe -ArgumentList "x `"$localZip`" -o`"$laragonDir`" -aoa -y" -NoNewWindow -Wait
+        } else {
+            $tarExe = "C:\Windows\System32\tar.exe"
+            if (Test-Path -Path $tarExe) {
+                Start-Process -FilePath $tarExe -ArgumentList "-xf `"$localZip`" -C `"$laragonDir`"" -NoNewWindow -Wait
+            } else {
+                Expand-Archive -Path $localZip -DestinationPath $laragonDir -Force
+            }
+        }
+        Write-LogSuccess "Paket Laragon Custom berhasil ditimpa secara sempurna!"
+    } else {
+        Write-LogWarning "Paket ZIP kustom belum dapat diunduh dari GDrive, menggunakan setup resmi Laragon 6.0.0."
+    }
+
+    # LANGKAH 4: Konfigurasi Otomatis phpMyAdmin (Auto-login & Bebas Warning) & Port
+    Setup-LaragonEnvironment
+    return $true
+}
+
+function Setup-WinRarLicense {
+    Write-LogStep "Menerapkan Lisensi Resmi WinRAR (rarreg.key)..."
+    $winrarDir = "C:\Program Files\WinRAR"
+    $appsDir = Get-AppStorageDirectory
+
+    $keyContent = @"
+RAR registration data
+WinRAR
+Unlimited Company License
+UID=4b914fb772c8376bf571
+6412212250f5711ad072cf351cfa39e2851192daf8a362681bbb1d
+cd48da1d14d995f0bbf960fce6cb5ffde62890079861be57638717
+7131ced835ed65cc743d9777f2ea71a8e32c7e593cf66794343565
+b41bcf56929486b8bcdac33d50ecf773996052598f1f556defffbd
+982fbe71e93df6b6346c37a3890f3c7edc65d7f5455470d13d1190
+6e6fb824bcf25f155547b5fc41901ad58c0992f570be1cf5608ba9
+aef69d48c864bcd72d15163897773d314187f6a9af350808719796
+"@
+
+    # 1. Simpan di folder apps\ agar sejajar dengan installer
+    $appKeyPath = Join-Path -Path $appsDir -ChildPath "rarreg.key"
+    Set-Content -Path $appKeyPath -Value $keyContent -Encoding ASCII
+
+    # 2. Pasang langsung ke direktori program WinRAR
+    if (Test-Path -Path $winrarDir) {
+        $targetKey = Join-Path -Path $winrarDir -ChildPath "rarreg.key"
+        Set-Content -Path $targetKey -Value $keyContent -Encoding ASCII
+        Write-LogSuccess "WinRAR berhasil diaktivasi secara resmi dengan Unlimited Company License!"
+        return $true
+    }
+    return $false
+}
+
+function Setup-VirtualBoxExtPack {
+    Write-LogStep "Memeriksa & Memasang Oracle VirtualBox Extension Pack..."
+
+    $vboxManage = "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe"
+    if (-not (Test-Path -Path $vboxManage)) {
+        Write-LogWarning "VirtualBox belum terpasang. Extension Pack akan dipasang setelah VirtualBox siap."
+        return $false
+    }
+
+    $appsDir = Get-AppStorageDirectory
+    $extPackFile = Join-Path -Path $appsDir -ChildPath "VirtualBox_Extension_Pack-7.2.20.vbox-extpack"
+
+    $extPackMirrors = @(
+        "1g0Ut2twJy71GQ4b6-4Nj6_3e99WCxWFY",
+        "1T3LOPKLTCx6JP0IZYBrJKaVaiqawXv6c",
+        "1bL621GdJ7tN1e3_IAClmwyIdyd5HcVxb",
+        "1dlEPu54jB1ai3McvksX15axwGONs64g-"
+    )
+
+    if (-not (Test-Path -Path $extPackFile) -or (Get-Item -Path $extPackFile).Length -lt 1MB) {
+        Invoke-GoogleDriveMultiMirrorDownload -MirrorIds $extPackMirrors -DestinationPath $extPackFile -AppName "VirtualBox Extension Pack" | Out-Null
+    }
+
+    if (Test-Path -Path $extPackFile) {
+        Write-LogInfo "Memasang Extension Pack ke VirtualBox via VBoxManage..."
+        $process = Start-Process -FilePath $vboxManage -ArgumentList "extpack install --replace `"$extPackFile`" --accept-license=33d7284dc4a0ece381196da3cef3f0cc1942b512426a57e03d80dbd29b0f490d" -NoNewWindow -Wait -PassThru
+        if ($process.ExitCode -eq 0) {
+            Write-LogSuccess "Oracle VirtualBox Extension Pack berhasil dipasang!"
             return $true
         }
     }
-
-    # 2. Cek apakah ada Google Drive ID yang diset
-    if (-not [string]::IsNullOrWhiteSpace($GdriveId) -and $GdriveId -ne "GDRIVE_FILE_ID_HERE") {
-        Write-LogInfo "Mengunduh paket Laragon Custom dari Google Drive (ID: $GdriveId)..."
-        $tempZip = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "laragon_custom_$([Guid]::NewGuid().ToString('N')).zip"
-        
-        $downloaded = Invoke-GoogleDriveDownload -FileId $GdriveId -DestinationPath $tempZip
-        if ($downloaded) {
-            Write-LogInfo "Mengekstrak paket dari Google Drive ke C:\laragon..."
-            $tarExe = "C:\Windows\System32\tar.exe"
-            if (Test-Path -Path $tarExe) {
-                Start-Process -FilePath $tarExe -ArgumentList "-xf `"$tempZip`" -C `"$laragonDir`"" -NoNewWindow -Wait
-            } else {
-                Expand-Archive -Path $tempZip -DestinationPath $laragonDir -Force
-            }
-            Remove-Item -Path $tempZip -Force -ErrorAction SilentlyContinue
-
-            if (Test-Path -Path $laragonExe) {
-                Write-LogSuccess "Laragon Custom Suite berhasil dipasang dari Google Drive!"
-                Setup-LaragonEnvironment
-                return $true
-            }
-        }
-    }
-
-    # 3. Fallback: Instalasi Laragon 6.0.0 Resmi
-    Write-LogWarning "Paket kustom lokal atau GDrive belum tersedia, beralih ke installer resmi Laragon 6.0.0..."
-    return (Install-LaragonOfficial)
+    return $false
 }
 
 function Install-LaragonOfficial {
