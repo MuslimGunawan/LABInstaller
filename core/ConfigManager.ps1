@@ -8,18 +8,21 @@ function Start-FullEnvironmentConfiguration {
         [switch]$Interactive = $true
     )
 
-    Write-LogStep "MENJALANKAN KONFIGURASI OTOMATIS PORT, PHP.INI & EKOSISTEM..."
+    Write-LogStep "MENJALANKAN KONFIGURASI OTOMATIS PORT, FIREWALL, PHP.INI & EKOSISTEM..."
 
     # 1. Konfigurasi Port Laragon vs XAMPP
     Configure-WebServerPorts
 
-    # 2. Konfigurasi php.ini untuk PHP 8.5, Laragon, dan XAMPP
+    # 2. Otomatisasi Izin Firewall (Auto-Allow Apache, Nginx, MySQL, Node, Python, dll)
+    Configure-FirewallRules
+
+    # 3. Konfigurasi php.ini untuk PHP 8.5, Laragon, dan XAMPP
     Configure-AllPhpExtensions
 
-    # 3. Konfigurasi Ekosistem Laravel
+    # 4. Konfigurasi Ekosistem Laravel
     Configure-LaravelEcosystem
 
-    Write-LogSuccess "Semua konfigurasi port dan environment berhasil diterapkan secara optimal!"
+    Write-LogSuccess "Semua konfigurasi port, firewall, dan environment berhasil diterapkan secara optimal!"
 }
 
 function Resolve-Port80Conflict {
@@ -659,5 +662,89 @@ function Configure-LaravelEcosystem {
     Write-Host " 2. Pip Tooling     : $(if ($pipCmd) { 'READY (' + ((pip --version 2>&1) -split '\n')[0] + ')' } else { 'BELUM TERPASANG' })" -ForegroundColor $(if ($pipCmd) { 'Green' } else { 'Yellow' })
     Write-Host "==================================================================" -ForegroundColor Cyan
     Write-Host ""
+}
+
+function Configure-FirewallRules {
+    Write-LogStep "Mengonfigurasi Aturan Windows Firewall (Auto-Allow Layanan Lab & Developer)..."
+
+    $targetApps = @(
+        # Web Servers & Proxies
+        @{ Name = "LAB: Apache HTTP Server (Laragon)"; Pattern = "C:\laragon\bin\apache\*\bin\httpd.exe" },
+        @{ Name = "LAB: Apache HTTP Server (XAMPP)";   Pattern = "C:\xampp\apache\bin\httpd.exe" },
+        @{ Name = "LAB: Nginx Server (Laragon)";       Pattern = "C:\laragon\bin\nginx\*\nginx.exe" },
+        @{ Name = "LAB: Ngrok Tunnel (Laragon)";       Pattern = "C:\laragon\bin\ngrok\ngrok.exe" },
+
+        # Databases & Caches
+        @{ Name = "LAB: MySQL Server (Laragon)";       Pattern = "C:\laragon\bin\mysql\*\bin\mysqld.exe" },
+        @{ Name = "LAB: MySQL Server (XAMPP)";         Pattern = "C:\xampp\mysql\bin\mysqld.exe" },
+        @{ Name = "LAB: PostgreSQL Server (Laragon)";  Pattern = "C:\laragon\bin\postgresql\*\bin\postgres.exe" },
+        @{ Name = "LAB: Redis Server (Laragon)";       Pattern = "C:\laragon\bin\redis\*\redis-server.exe" },
+        @{ Name = "LAB: Memcached Server (Laragon)";   Pattern = "C:\laragon\bin\memcached\*\memcached.exe" },
+
+        # Runtimes & Dev Tooling
+        @{ Name = "LAB: Node.js JavaScript Runtime";   Pattern = "C:\Program Files\nodejs\node.exe" },
+        @{ Name = "LAB: Node.js (Laragon)";            Pattern = "C:\laragon\bin\nodejs\*\node.exe" },
+        @{ Name = "LAB: Python Interpreter";           Pattern = "C:\Program Files\Python*\python.exe" },
+        @{ Name = "LAB: Python (LocalApp)";            Pattern = "$env:LOCALAPPDATA\Programs\Python\Python*\python.exe" },
+        @{ Name = "LAB: Python (Laragon)";             Pattern = "C:\laragon\bin\python\*\python.exe" },
+        @{ Name = "LAB: PHP CLI / Built-in Server";    Pattern = "C:\Program Files\PHP\*\php.exe" },
+        @{ Name = "LAB: PHP (Laragon)";                Pattern = "C:\laragon\bin\php\*\php.exe" },
+        @{ Name = "LAB: PHP (XAMPP)";                  Pattern = "C:\xampp\php\php.exe" },
+        @{ Name = "LAB: Git Executable";               Pattern = "C:\Program Files\Git\bin\git.exe" },
+        @{ Name = "LAB: OpenJDK / Java Runtime";       Pattern = "C:\Program Files\Eclipse Adoptium\*\bin\java.exe" },
+        @{ Name = "LAB: OpenJDK Java (Zulu/Other)";    Pattern = "C:\Program Files\*\bin\java.exe" }
+    )
+
+    $configuredCount = 0
+
+    foreach ($item in $targetApps) {
+        $paths = Resolve-Path -Path $item.Pattern -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path
+        if (-not $paths) {
+            # Coba cari dari PATH sistem jika pattern tidak langsung cocok
+            if ($item.Pattern -match '([^\\]+\.exe)$') {
+                $cmdName = $matches[1]
+                $cmdObj = Get-Command $cmdName -ErrorAction SilentlyContinue
+                if ($cmdObj -and (Test-Path -Path $cmdObj.Source)) {
+                    $paths = @($cmdObj.Source)
+                }
+            }
+        }
+
+        if ($paths) {
+            foreach ($exePath in $paths) {
+                if (Test-Path -Path $exePath) {
+                    $ruleBaseName = "$($item.Name) - $(Split-Path -Leaf $exePath)"
+                    try {
+                        # Tambahkan aturan Inbound Allow untuk TCP & UDP (Private & Public)
+                        # Menggunakan netsh advfirewall yang sangat cepat dan kompatibel di semua versi Windows
+                        $ruleNameTCP = "$ruleBaseName (TCP-In)"
+                        $ruleNameUDP = "$ruleBaseName (UDP-In)"
+
+                        # Hapus aturan lama jika pernah ada agar bersih & terbarui
+                        netsh advfirewall firewall delete rule name="$ruleNameTCP" 2>$null | Out-Null
+                        netsh advfirewall firewall delete rule name="$ruleNameUDP" 2>$null | Out-Null
+
+                        # Daftarkan aturan TCP
+                        $resTcp = netsh advfirewall firewall add rule name="$ruleNameTCP" dir=in action=allow program="$exePath" protocol=TCP enable=yes profile=any 2>&1
+                        # Daftarkan aturan UDP
+                        $resUdp = netsh advfirewall firewall add rule name="$ruleNameUDP" dir=in action=allow program="$exePath" protocol=UDP enable=yes profile=any 2>&1
+
+                        if ($resTcp -match 'Ok|Berhasil|successfully' -or $LASTEXITCODE -eq 0) {
+                            $configuredCount++
+                            Write-LogInfo "Firewall Allow disetujui otomatis: $(Split-Path -Leaf $exePath)"
+                        }
+                    } catch {
+                        Write-LogWarning "Gagal mendaftarkan firewall untuk $exePath : $_"
+                    }
+                }
+            }
+        }
+    }
+
+    if ($configuredCount -gt 0) {
+        Write-LogSuccess "Berhasil mengonfigurasi $configuredCount layanan ke dalam Windows Firewall (Auto-Allow Bebas Popup Dialog)!"
+    } else {
+        Write-LogInfo "Tidak ada binary layanan baru yang perlu didaftarkan ke Firewall."
+    }
 }
 

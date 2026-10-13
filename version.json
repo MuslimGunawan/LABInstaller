@@ -1,7 +1,7 @@
 {
-  "version": "1.0.13",
+  "version": "1.0.14",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-14",
-  "description": "v1.0.13: Perbaikan tuntas tombol Web & Database Laragon: Penyelarasan registry 32-bit (WOW6432Node) StartMenuInternet, App Paths, IFEO Debugger, dan Preferences Browser Laragon langsung ke Google Chrome/Edge"
+  "description": "v1.0.14: Otomatisasi izin Windows Firewall (Auto-Allow Inbound TCP/UDP) untuk seluruh layanan (Apache, Nginx, MySQL, PostgreSQL, Redis, Memcached, Node.js, Python, PHP, Java) agar bebas dari popup dialog Windows Security Alert"
 }
