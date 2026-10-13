@@ -153,6 +153,17 @@ function Get-CustomCommandFallbackPath {
                 if (Test-Path -Path $c) { return $c }
             }
         }
+        "pip" {
+            $candidates = @(
+                "$env:LOCALAPPDATA\Programs\Python\Python3*\Scripts\pip.exe",
+                "C:\Program Files\Python3*\Scripts\pip.exe",
+                "C:\Python3*\Scripts\pip.exe"
+            )
+            foreach ($c in $candidates) {
+                $matched = Get-Item -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($matched) { return $matched.FullName }
+            }
+        }
     }
     return $null
 }

@@ -4,19 +4,124 @@
 # ==============================================================================
 
 function Setup-PythonEnvironment {
-    Write-LogStep "Mengonfigurasi environment Python..."
+    Write-LogStep "Mengonfigurasi environment Python & Pip..."
     Refresh-CurrentSessionEnvironment
 
     $pythonCmd = Get-Command "python.exe" -ErrorAction SilentlyContinue
+    if (-not $pythonCmd) {
+        $pyCandidates = @(
+            "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe",
+            "C:\Program Files\Python3*\python.exe",
+            "C:\Python3*\python.exe"
+        )
+        foreach ($c in $pyCandidates) {
+            $matched = Get-Item -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($matched) {
+                $pythonCmd = [PSCustomObject]@{ Source = $matched.FullName }
+                break
+            }
+        }
+    }
+
     if ($pythonCmd) {
         $pythonDir = Split-Path -Parent $pythonCmd.Source
         $scriptsDir = Join-Path -Path $pythonDir -ChildPath "Scripts"
 
         Add-DirectoryToPath -PathToAdd $pythonDir -Scope "Machine" | Out-Null
-        if (Test-Path -Path $scriptsDir) {
-            Add-DirectoryToPath -PathToAdd $scriptsDir -Scope "Machine" | Out-Null
+        if (-not (Test-Path -Path $scriptsDir)) {
+            New-Item -ItemType Directory -Path $scriptsDir -Force | Out-Null
         }
-        Write-LogSuccess "Environment Python & Pip berhasil dikonfigurasi."
+        Add-DirectoryToPath -PathToAdd $scriptsDir -Scope "Machine" | Out-Null
+
+        # Bootstrap & perbarui pip
+        try {
+            Start-Process -FilePath $pythonCmd.Source -ArgumentList "-m ensurepip --default-pip" -NoNewWindow -Wait
+            Start-Process -FilePath $pythonCmd.Source -ArgumentList "-m pip install --upgrade pip" -NoNewWindow -Wait
+        } catch {}
+
+        Refresh-CurrentSessionEnvironment
+        Write-LogSuccess "Environment Python & Pip ($scriptsDir di PATH) berhasil dikonfigurasi."
+    }
+}
+
+function Install-PipOfficial {
+    Write-LogStep "Mengonfigurasi dan Memverifikasi Pip (Python Package Manager)..."
+    Refresh-CurrentSessionEnvironment
+
+    $pipCmd = Get-Command "pip.exe" -ErrorAction SilentlyContinue
+    if ($pipCmd) {
+        Write-LogInfo "Pip sudah terdeteksi di: $($pipCmd.Source)"
+        try {
+            $ver = & $pipCmd.Source "--version"
+            Write-LogSuccess "Pip aktif: $ver"
+        } catch {}
+        return $true
+    }
+
+    # Cari python jika belum di PATH
+    $pythonCmd = Get-Command "python.exe" -ErrorAction SilentlyContinue
+    if (-not $pythonCmd) {
+        $pyCandidates = @(
+            "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe",
+            "C:\Program Files\Python3*\python.exe",
+            "C:\Python3*\python.exe"
+        )
+        foreach ($c in $pyCandidates) {
+            $matched = Get-Item -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($matched) {
+                $pythonCmd = [PSCustomObject]@{ Source = $matched.FullName }
+                break
+            }
+        }
+    }
+
+    if (-not $pythonCmd) {
+        Write-LogError "Python belum terpasang. Pip membutuhkan Python 3 terlebih dahulu."
+        return $false
+    }
+
+    Write-LogInfo "Menjalankan bootstrap resmi pip via ensurepip..."
+    Start-Process -FilePath $pythonCmd.Source -ArgumentList "-m ensurepip --default-pip" -NoNewWindow -Wait
+
+    Write-LogInfo "Memperbarui pip ke versi stabil terbaru..."
+    Start-Process -FilePath $pythonCmd.Source -ArgumentList "-m pip install --upgrade pip" -NoNewWindow -Wait
+
+    # Daftarkan folder Scripts ke PATH
+    $pyDir = Split-Path -Parent $pythonCmd.Source
+    $scriptsDir = Join-Path -Path $pyDir -ChildPath "Scripts"
+    if (Test-Path -Path $scriptsDir) {
+        Add-DirectoryToPath -PathToAdd $scriptsDir -Scope "Machine" | Out-Null
+        Add-DirectoryToPath -PathToAdd $pyDir -Scope "Machine" | Out-Null
+    }
+
+    Refresh-CurrentSessionEnvironment
+
+    $checkPip = Get-Command "pip.exe" -ErrorAction SilentlyContinue
+    if ($checkPip) {
+        Write-LogSuccess "Pip berhasil diaktifkan dan didaftarkan ke sistem PATH!"
+        return $true
+    } else {
+        # Fallback menggunakan get-pip.py resmi dari PyPA
+        Write-LogInfo "Mengunduh bootstrap resmi get-pip.py dari pypa.io..."
+        $appsDir = Get-AppStorageDirectory
+        $getPipPath = Join-Path -Path $appsDir -ChildPath "get-pip.py"
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            $wc = New-Object System.Net.WebClient
+            $wc.Headers.Add("User-Agent", "LABInstaller")
+            $wc.DownloadFile("https://bootstrap.pypa.io/get-pip.py", $getPipPath)
+            Start-Process -FilePath $pythonCmd.Source -ArgumentList "`"$getPipPath`"" -NoNewWindow -Wait
+
+            if (Test-Path -Path $scriptsDir) {
+                Add-DirectoryToPath -PathToAdd $scriptsDir -Scope "Machine" | Out-Null
+            }
+            Refresh-CurrentSessionEnvironment
+            Write-LogSuccess "Pip berhasil dipasang via get-pip.py!"
+            return $true
+        } catch {
+            Write-LogError "Gagal memasang pip - $_"
+            return $false
+        }
     }
 }
 

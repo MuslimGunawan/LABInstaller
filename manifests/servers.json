@@ -4,7 +4,7 @@
     "name": "Laragon WAMP Custom Lab Suite",
     "category": "Web Server Environment",
     "type": "custom",
-    "priority": 11,
+    "priority": 12,
     "registryPattern": "Laragon",
     "pathCheck": "C:\\laragon\\laragon.exe",
     "gdriveMirrors": [
@@ -26,7 +26,7 @@
     "name": "XAMPP 8.2",
     "category": "Web Server Environment",
     "type": "hybrid",
-    "priority": 12,
+    "priority": 13,
     "wingetId": "ApacheFriends.Xampp.8.2",
     "registryPattern": "XAMPP",
     "pathCheck": "C:\\xampp\\xampp-control.exe",

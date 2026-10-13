@@ -364,5 +364,14 @@ function Configure-LaravelEcosystem {
     Write-Host "  3. npm install && npm run build" -ForegroundColor White
     Write-Host "  4. composer run dev" -ForegroundColor White
     Write-Host ""
+
+    # Status Ekosistem Python & Pip
+    $pyCmd = Get-Command "python" -ErrorAction SilentlyContinue
+    $pipCmd = Get-Command "pip" -ErrorAction SilentlyContinue
+    Write-Host "====================== KESIAPAN PYTHON & PIP =====================" -ForegroundColor Cyan
+    Write-Host " 1. Python Runtime  : $(if ($pyCmd) { 'READY (' + (python --version 2>&1) + ')' } else { 'BELUM TERPASANG' })" -ForegroundColor $(if ($pyCmd) { 'Green' } else { 'Yellow' })
+    Write-Host " 2. Pip Tooling     : $(if ($pipCmd) { 'READY (' + ((pip --version 2>&1) -split '\n')[0] + ')' } else { 'BELUM TERPASANG' })" -ForegroundColor $(if ($pipCmd) { 'Green' } else { 'Yellow' })
+    Write-Host "==================================================================" -ForegroundColor Cyan
+    Write-Host ""
 }
 

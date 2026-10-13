@@ -1,7 +1,7 @@
 {
-  "version": "1.0.8",
+  "version": "1.0.9",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-13",
-  "description": "v1.0.8: Migrasi Flutter SDK ke Google Storage Bundle resmi (flutter_windows_3.47.7-stable.zip) dengan offline cache di apps/ dan ekstraksi cepat 7-Zip"
+  "description": "v1.0.9: Integrasi Pip (Python Package Installer), registrasi Scripts PATH, ensurepip bootstrap & verifikasi ekosistem Python"
 }
