@@ -147,7 +147,7 @@ function Configure-WebServerPorts {
             if ($confText -match 'Listen\s+80\r?\n') {
                 $confText = $confText -replace 'Listen\s+80', 'Listen 8080'
                 $confText = $confText -replace 'ServerName\s+localhost:80', 'ServerName localhost:8080'
-                Set-Content -Path $httpdConf -Value $confText -Encoding UTF8
+                [System.IO.File]::WriteAllText($httpdConf, $confText, [System.Text.Encoding]::ASCII)
                 Write-LogSuccess "XAMPP Apache HTTP Port disesuaikan ke: 8080 (Bebas Bentrok)."
             } else {
                 Write-LogInfo "XAMPP Apache HTTP Port sudah menggunakan port alternatif."
@@ -162,27 +162,50 @@ function Configure-WebServerPorts {
                 $sslText = $sslText -replace 'Listen\s+443', 'Listen 4433'
                 $sslText = $sslText -replace '<VirtualHost _default_:443>', '<VirtualHost _default_:4433>'
                 $sslText = $sslText -replace 'ServerName\s+localhost:443', 'ServerName localhost:4433'
-                Set-Content -Path $sslConf -Value $sslText -Encoding UTF8
+                [System.IO.File]::WriteAllText($sslConf, $sslText, [System.Text.Encoding]::ASCII)
                 Write-LogSuccess "XAMPP Apache HTTPS (SSL) Port disesuaikan ke: 4433 (Bebas Bentrok)."
             }
         }
 
-        # C. Atur MySQL XAMPP ke Port 3307 (Bebas dari Laragon MySQL 3306)
+        # C. Atur MySQL XAMPP ke Port 3307 (Bebas dari Laragon MySQL 3306) & Pemulihan Mutlak Tanpa BOM
         $myIni = Join-Path -Path $xamppDir -ChildPath "mysql\bin\my.ini"
+        $mysqlDataDir = Join-Path -Path $xamppDir -ChildPath "mysql\data"
+        $mysqlBackupDir = Join-Path -Path $xamppDir -ChildPath "mysql\backup"
+
         if (Test-Path -Path $myIni) {
+            # Hentikan sisa proses mysqld jika ada yang tersangkut/crash
+            Get-Process -Name "mysqld", "mysql" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+            # Hapus file lock / stale PID yang memblokir startup MySQL
+            if (Test-Path -Path $mysqlDataDir) {
+                Get-ChildItem -Path $mysqlDataDir -Filter "*.pid" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+            }
+
+            # Ganti port 3306 menjadi 3307 untuk kedua blok [client] dan [mysqld]
             $myText = Get-Content -Path $myIni -Raw
-            if ($myText -match 'port\s*=\s*3306') {
-                $myText = $myText -replace 'port\s*=\s*3306', 'port = 3307'
-                Set-Content -Path $myIni -Value $myText -Encoding UTF8
-                Write-LogSuccess "XAMPP MySQL Port disesuaikan ke: 3307 (Bebas Bentrok)."
+            $myText = $myText -replace 'port\s*=\s*\d+', 'port = 3307'
+
+            # KRITIKAL: Tulis berkas strictly ASCII (TANPA UTF-8 BOM)
+            # Binary MySQL Windows akan crash jika menemukan UTF-8 BOM di baris pertama ([client])!
+            [System.IO.File]::WriteAllText($myIni, $myText, [System.Text.Encoding]::ASCII)
+            Write-LogSuccess "XAMPP MySQL Port disesuaikan ke: 3307 (Encoding ASCII Non-BOM Valid)."
+
+            # Verifikasi jika database sistem awal belum terinisialisasi
+            $sysDbPath = Join-Path -Path $mysqlDataDir -ChildPath "mysql"
+            if ((-not (Test-Path -Path $sysDbPath)) -and (Test-Path -Path $mysqlBackupDir)) {
+                Write-LogInfo "Memulihkan berkas basis data sistem awal XAMPP dari backup..."
+                Copy-Item -Path "$mysqlBackupDir\*" -Destination $mysqlDataDir -Recurse -Force -ErrorAction SilentlyContinue
             }
         }
 
-        # D. Atur XAMPP Control Panel (xampp-control.ini) agar Tombol 'Admin' Mengarah ke URL yang Benar
+        # D. Atur XAMPP Control Panel (xampp-control.ini)
+        # 1. Port Services (8080, 4433, 3307)
+        # 2. Browser Modern (Google Chrome / Edge) agar tidak memanggil Internet Explorer 11 yang mati di Windows 11
         $xamppControlIni = Join-Path -Path $xamppDir -ChildPath "xampp-control.ini"
         if (Test-Path -Path $xamppControlIni) {
             $iniContent = Get-Content -Path $xamppControlIni -Raw
-            # Update atau tambahkan konfigurasi port di xampp-control.ini
+            
+            # Update ServicePorts
             if ($iniContent -match '\[ServicePorts\]') {
                 $iniContent = $iniContent -replace 'Apache\s*=\s*\d+', 'Apache=8080'
                 $iniContent = $iniContent -replace 'ApacheSSL\s*=\s*\d+', 'ApacheSSL=4433'
@@ -190,40 +213,89 @@ function Configure-WebServerPorts {
             } else {
                 $iniContent += "`r`n[ServicePorts]`r`nApache=8080`r`nApacheSSL=4433`r`nMySQL=3307`r`n"
             }
-            Set-Content -Path $xamppControlIni -Value $iniContent -Encoding UTF8
-            Write-LogSuccess "XAMPP Control Panel INI diselaraskan: Tombol Admin membuka http://localhost:8080/."
+
+            # Deteksi browser modern yang terpasang di sistem
+            $browserExe = $null
+            $browserCandidates = @(
+                "C:\Program Files\Google\Chrome\Application\chrome.exe",
+                "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                "C:\Program Files\Microsoft\Edge\Application\msedge.exe"
+            )
+            foreach ($b in $browserCandidates) {
+                if (Test-Path -Path $b) {
+                    $browserExe = $b
+                    break
+                }
+            }
+
+            if ($browserExe) {
+                if ($iniContent -match '\[Common\]') {
+                    if ($iniContent -match 'Browser\s*=.*') {
+                        $iniContent = $iniContent -replace 'Browser\s*=.*', "Browser=$browserExe"
+                    } else {
+                        $iniContent = $iniContent -replace '(\[Common\]\r?\n)', "`$1Browser=$browserExe`r`n"
+                    }
+                } else {
+                    $iniContent += "`r`n[Common]`r`nBrowser=$browserExe`r`n"
+                }
+                Write-LogSuccess "Browser default XAMPP diselaraskan ke: $browserExe (Bebas error IE 11)."
+            }
+
+            # Simpan tanpa BOM
+            [System.IO.File]::WriteAllText($xamppControlIni, $iniContent, [System.Text.Encoding]::ASCII)
+            Write-LogSuccess "XAMPP Control Panel INI diselaraskan: Tombol Admin membuka http://localhost:8080/ via browser modern."
         }
 
         # E. Antisipasi Error phpMyAdmin XAMPP: "mysqli_real_connect(): target machine actively refused it"
-        # Sinkronkan phpMyAdmin XAMPP agar konek ke MySQL port 3307
+        # Sinkronkan phpMyAdmin XAMPP agar konek ke MySQL port 3307 dan IP 127.0.0.1
         $xamppPmaConfig = Join-Path -Path $xamppDir -ChildPath "phpMyAdmin\config.inc.php"
         if (Test-Path -Path $xamppPmaConfig) {
-            $pmaText = Get-Content -Path $xamppPmaConfig -Raw -Encoding UTF8
+            $pmaText = Get-Content -Path $xamppPmaConfig -Raw
             if ($pmaText -match "\`$cfg\['Servers'\]\[\`$i\]\['port'\]\s*=\s*'?\d+'?;") {
                 $pmaText = $pmaText -replace "\`$cfg\['Servers'\]\[\`$i\]\['port'\]\s*=\s*'?\d+'?;", "`$cfg['Servers'][`$i]['port'] = '3307';"
             } else {
                 $pmaText = $pmaText -replace "(\`$cfg\['Servers'\]\[\`$i\]\['host'\].*?;)", "`$1`r`n`$cfg['Servers'][`$i]['port'] = '3307';"
             }
-            Set-Content -Path $xamppPmaConfig -Value $pmaText -Encoding UTF8
-            Write-LogSuccess "phpMyAdmin XAMPP disinkronkan ke Port 3307 (Bebas error mysqli target machine refused)!"
+            # Pakai 127.0.0.1 daripada localhost untuk mencegah resolusi IPv6 ::1 yang sering ditolak MariaDB
+            $pmaText = $pmaText -replace "\`$cfg\['Servers'\]\[\`$i\]\['host'\]\s*=\s*'localhost';", "`$cfg['Servers'][`$i]['host'] = '127.0.0.1';"
+            [System.IO.File]::WriteAllText($xamppPmaConfig, $pmaText, [System.Text.Encoding]::ASCII)
+            Write-LogSuccess "phpMyAdmin XAMPP disinkronkan ke 127.0.0.1:3307 (Bebas error mysqli target machine refused)!"
         }
 
         # F. Sinkronkan default port MySQL di php.ini XAMPP
         $xamppPhpIni = Join-Path -Path $xamppDir -ChildPath "php\php.ini"
         if (Test-Path -Path $xamppPhpIni) {
-            $phpIniText = Get-Content -Path $xamppPhpIni -Raw -Encoding UTF8
+            $phpIniText = Get-Content -Path $xamppPhpIni -Raw
             $phpIniText = $phpIniText -replace 'mysqli\.default_port\s*=\s*\d+', 'mysqli.default_port = 3307'
             $phpIniText = $phpIniText -replace 'mysql\.default_port\s*=\s*\d+', 'mysql.default_port = 3307'
-            Set-Content -Path $xamppPhpIni -Value $phpIniText -Encoding UTF8
+            [System.IO.File]::WriteAllText($xamppPhpIni, $phpIniText, [System.Text.Encoding]::ASCII)
         }
     }
 
-    # Jika Laragon terpasang, perbaiki phpMyAdmin Laragon (Auto-Login Root tanpa password & Bebas Warning)
+    # Jika Laragon terpasang:
     if ($hasLaragon) {
+        # 1. Pastikan Nginx DINONAKTIFKAN (Use=0) agar tidak bentrok dengan Apache di Port 80
+        $laragonIni = Join-Path -Path $laragonDir -ChildPath "usr\laragon.ini"
+        if (Test-Path -Path $laragonIni) {
+            $lIniText = Get-Content -Path $laragonIni -Raw
+            # Set [nginx] Use=0
+            if ($lIniText -match '\[nginx\][^\[]*Use\s*=\s*-1') {
+                $lIniText = $lIniText -replace '(\[nginx\][^\[]*?Use\s*=\s*)-1', '${1}0'
+            }
+            # Pastikan [apache] Use=-1
+            if ($lIniText -match '\[apache\][^\[]*Use\s*=\s*0') {
+                $lIniText = $lIniText -replace '(\[apache\][^\[]*?Use\s*=\s*)0', '${1}-1'
+            }
+            [System.IO.File]::WriteAllText($laragonIni, $lIniText, [System.Text.Encoding]::UTF8)
+            Write-LogSuccess "Laragon diselaraskan: Apache aktif di Port 80 & Nginx dinonaktifkan (Use=0) agar bebas bentrok!"
+        }
+
+        # 2. Optimasi phpMyAdmin Laragon (Auto-Login Root tanpa password & Bebas Warning)
         Write-LogInfo "Menyesuaikan phpMyAdmin Laragon agar Auto-Login (tanpa login popup) & Bebas Warning..."
         $laragonPmaConfig = Join-Path -Path $laragonDir -ChildPath "etc\apps\phpMyAdmin\config.inc.php"
         if (Test-Path -Path $laragonPmaConfig) {
-            $lPmaText = Get-Content -Path $laragonPmaConfig -Raw -Encoding UTF8
+            $lPmaText = Get-Content -Path $laragonPmaConfig -Raw
             
             # Ganti auth_type cookie menjadi config (seperti XAMPP tanpa popup login)
             $lPmaText = $lPmaText -replace "\`$cfg\['Servers'\]\[\`$i\]\['auth_type'\]\s*=\s*'cookie';", @"
@@ -245,7 +317,7 @@ function Configure-WebServerPorts {
 `$cfg['VersionCheck'] = false;
 "@
             }
-            Set-Content -Path $laragonPmaConfig -Value $lPmaText -Encoding UTF8
+            [System.IO.File]::WriteAllText($laragonPmaConfig, $lPmaText, [System.Text.Encoding]::UTF8)
             Write-LogSuccess "phpMyAdmin Laragon berhasil dioptimasi: Langsung terbuka otomatis tanpa login & bebas warning!"
         }
     }
