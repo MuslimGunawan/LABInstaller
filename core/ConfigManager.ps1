@@ -77,20 +77,93 @@ function Configure-WebServerPorts {
                 Write-LogSuccess "XAMPP MySQL Port disesuaikan ke: 3307 (Bebas Bentrok)."
             }
         }
+
+        # D. Atur XAMPP Control Panel (xampp-control.ini) agar Tombol 'Admin' Mengarah ke URL yang Benar
+        $xamppControlIni = Join-Path -Path $xamppDir -ChildPath "xampp-control.ini"
+        if (Test-Path -Path $xamppControlIni) {
+            $iniContent = Get-Content -Path $xamppControlIni -Raw
+            # Update atau tambahkan konfigurasi port di xampp-control.ini
+            if ($iniContent -match '\[ServicePorts\]') {
+                $iniContent = $iniContent -replace 'Apache\s*=\s*\d+', 'Apache=8080'
+                $iniContent = $iniContent -replace 'ApacheSSL\s*=\s*\d+', 'ApacheSSL=4433'
+                $iniContent = $iniContent -replace 'MySQL\s*=\s*\d+', 'MySQL=3307'
+            } else {
+                $iniContent += "`r`n[ServicePorts]`r`nApache=8080`r`nApacheSSL=4433`r`nMySQL=3307`r`n"
+            }
+            Set-Content -Path $xamppControlIni -Value $iniContent -Encoding UTF8
+            Write-LogSuccess "XAMPP Control Panel INI diselaraskan: Tombol Admin membuka http://localhost:8080/."
+        }
+
+        # E. Antisipasi Error phpMyAdmin XAMPP: "mysqli_real_connect(): target machine actively refused it"
+        # Sinkronkan phpMyAdmin XAMPP agar konek ke MySQL port 3307
+        $xamppPmaConfig = Join-Path -Path $xamppDir -ChildPath "phpMyAdmin\config.inc.php"
+        if (Test-Path -Path $xamppPmaConfig) {
+            $pmaText = Get-Content -Path $xamppPmaConfig -Raw -Encoding UTF8
+            if ($pmaText -match "\`$cfg\['Servers'\]\[\`$i\]\['port'\]\s*=\s*'?\d+'?;") {
+                $pmaText = $pmaText -replace "\`$cfg\['Servers'\]\[\`$i\]\['port'\]\s*=\s*'?\d+'?;", "`$cfg['Servers'][`$i]['port'] = '3307';"
+            } else {
+                $pmaText = $pmaText -replace "(\`$cfg\['Servers'\]\[\`$i\]\['host'\].*?;)", "`$1`r`n`$cfg['Servers'][`$i]['port'] = '3307';"
+            }
+            Set-Content -Path $xamppPmaConfig -Value $pmaText -Encoding UTF8
+            Write-LogSuccess "phpMyAdmin XAMPP disinkronkan ke Port 3307 (Bebas error mysqli target machine refused)!"
+        }
+
+        # F. Sinkronkan default port MySQL di php.ini XAMPP
+        $xamppPhpIni = Join-Path -Path $xamppDir -ChildPath "php\php.ini"
+        if (Test-Path -Path $xamppPhpIni) {
+            $phpIniText = Get-Content -Path $xamppPhpIni -Raw -Encoding UTF8
+            $phpIniText = $phpIniText -replace 'mysqli\.default_port\s*=\s*\d+', 'mysqli.default_port = 3307'
+            $phpIniText = $phpIniText -replace 'mysql\.default_port\s*=\s*\d+', 'mysql.default_port = 3307'
+            Set-Content -Path $xamppPhpIni -Value $phpIniText -Encoding UTF8
+        }
+    }
+
+    # Jika Laragon terpasang, perbaiki phpMyAdmin Laragon (Auto-Login Root tanpa password & Bebas Warning)
+    if ($hasLaragon) {
+        Write-LogInfo "Menyesuaikan phpMyAdmin Laragon agar Auto-Login (tanpa login popup) & Bebas Warning..."
+        $laragonPmaConfig = Join-Path -Path $laragonDir -ChildPath "etc\apps\phpMyAdmin\config.inc.php"
+        if (Test-Path -Path $laragonPmaConfig) {
+            $lPmaText = Get-Content -Path $laragonPmaConfig -Raw -Encoding UTF8
+            
+            # Ganti auth_type cookie menjadi config (seperti XAMPP tanpa popup login)
+            $lPmaText = $lPmaText -replace "\`$cfg\['Servers'\]\[\`$i\]\['auth_type'\]\s*=\s*'cookie';", @"
+`$cfg['Servers'][`$i]['auth_type'] = 'config';
+`$cfg['Servers'][`$i]['user'] = 'root';
+`$cfg['Servers'][`$i]['password'] = '';
+`$cfg['Servers'][`$i]['AllowNoPassword'] = true;
+"@
+            # Blowfish secret 32-byte valid
+            $lPmaText = $lPmaText -replace "\`$cfg\['blowfish_secret'\]\s*=\s*'.*?';", "`$cfg['blowfish_secret'] = 'vK8mQ2xL9pZ4wR7tY1uI3oE5aA6sD8fG';"
+
+            # Matikan warning
+            if ($lPmaText -notmatch "PmaNoRelation_DisableWarning") {
+                $lPmaText += @"
+
+// Hilangkan peringatan konfigurasi storage & error reports
+`$cfg['PmaNoRelation_DisableWarning'] = true;
+`$cfg['SendErrorReports'] = 'never';
+`$cfg['VersionCheck'] = false;
+"@
+            }
+            Set-Content -Path $laragonPmaConfig -Value $lPmaText -Encoding UTF8
+            Write-LogSuccess "phpMyAdmin Laragon berhasil dioptimasi: Langsung terbuka otomatis tanpa login & bebas warning!"
+        }
     }
 
     Write-Host ""
-    Write-Host "====================== SKEMA PEMBAGIAN PORT ======================" -ForegroundColor Cyan
-    Write-Host " [LARAGON] (Prioritas Utama untuk Dev Laravel/PHP):" -ForegroundColor White
-    Write-Host "   - Apache HTTP  : 80" -ForegroundColor Green
-    Write-Host "   - Apache HTTPS : 443" -ForegroundColor Green
+    Write-Host "====================== SKEMA PEMBAGIAN PORT & ADMIN ======================" -ForegroundColor Cyan
+    Write-Host " [LARAGON] (Port Bawaan / Standar Resmi):" -ForegroundColor White
+    Write-Host "   - Apache HTTP  : 80  -> Web: http://localhost/" -ForegroundColor Green
+    Write-Host "   - Apache HTTPS : 443 -> SSL: https://localhost/" -ForegroundColor Green
     Write-Host "   - MySQL Server : 3306" -ForegroundColor Green
-    Write-Host " [XAMPP] (Dukungan Tambahan/Praktikum):" -ForegroundColor White
-    Write-Host "   - Apache HTTP  : 8080 (Akses via http://localhost:8080)" -ForegroundColor Yellow
+    Write-Host "   - phpMyAdmin   : http://localhost/phpmyadmin/ (Auto-Login Root, Tanpa Password)" -ForegroundColor Green
+    Write-Host " [XAMPP] (Port Alternatif Lab Komputer):" -ForegroundColor White
+    Write-Host "   - Apache HTTP  : 8080 -> Admin Apache: http://localhost:8080/dashboard/" -ForegroundColor Yellow
     Write-Host "   - Apache HTTPS : 4433" -ForegroundColor Yellow
     Write-Host "   - MySQL Server : 3307" -ForegroundColor Yellow
-    Write-Host " Status: BEBAS BENTROK (Kedua Web Server dapat berjalan simultan)!" -ForegroundColor Green
-    Write-Host "==================================================================" -ForegroundColor Cyan
+    Write-Host "   - phpMyAdmin   : http://localhost:8080/phpmyadmin/ (Terkoneksi ke Port 3307)" -ForegroundColor Yellow
+    Write-Host " Status: BEBAS BENTROK & TOMBOL ADMIN AKURAT 100%!" -ForegroundColor Green
+    Write-Host "==========================================================================" -ForegroundColor Cyan
 }
 
 function Configure-AllPhpExtensions {

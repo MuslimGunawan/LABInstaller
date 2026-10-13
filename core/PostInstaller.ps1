@@ -222,6 +222,116 @@ function Install-FlutterSdkOfficial {
     }
 }
 
+function Invoke-GoogleDriveDownload {
+    param (
+        [string]$FileId,
+        [string]$DestinationPath
+    )
+
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Write-LogInfo "Menghubungkan ke Google Drive untuk mengunduh berkas (ID: $FileId)..."
+
+        $baseUrl = "https://drive.google.com/uc?export=download&id=$FileId"
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+
+        # Unduh halaman pertama untuk memeriksa token konfirmasi virus scan (file besar)
+        $html = $wc.DownloadString($baseUrl)
+        $downloadUrl = $baseUrl
+
+        if ($html -match 'confirm=([0-9A-Za-z_-]+)') {
+            $token = $matches[1]
+            $downloadUrl = "https://drive.google.com/uc?export=download&confirm=$token&id=$FileId"
+            Write-LogInfo "Token konfirmasi file besar terdeteksi. Memulai pengunduhan..."
+        }
+
+        $wc.DownloadFile($downloadUrl, $DestinationPath)
+        return (Test-Path -Path $DestinationPath)
+    }
+    catch {
+        Write-LogError "Gagal mengunduh berkas dari Google Drive: $_"
+        return $false
+    }
+}
+
+function Install-LaragonCustomSuite {
+    param (
+        [string]$GdriveId = ""
+    )
+
+    Write-LogStep "Menginstal Laragon Custom Suite (Edisi Lab Komputer)..."
+    Refresh-CurrentSessionEnvironment
+
+    $laragonDir = "C:\laragon"
+    $laragonExe = Join-Path -Path $laragonDir -ChildPath "laragon.exe"
+
+    if (Test-Path -Path $laragonExe) {
+        Write-LogSuccess "Laragon sudah terpasang di C:\laragon. Mengoptimalkan konfigurasi..."
+        Setup-LaragonEnvironment
+        return $true
+    }
+
+    if (-not (Test-Path -Path $laragonDir)) {
+        New-Item -ItemType Directory -Path $laragonDir -Force | Out-Null
+    }
+
+    # 1. Cek apakah ada file ZIP lokal di direktori komputer (misal D:\KP\Laragon_Custom_LAB.zip)
+    $candidateZips = @(
+        "D:\KP\Laragon_Custom_LAB.zip",
+        (Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath "Laragon_Custom_LAB.zip"),
+        (Join-Path -Path (Get-Location).Path -ChildPath "Laragon_Custom_LAB.zip")
+    )
+
+    $localZip = $candidateZips | Where-Object { Test-Path -Path $_ } | Select-Object -First 1
+
+    if ($localZip) {
+        Write-LogSuccess "Menemukan paket lokal Laragon Custom: $localZip"
+        Write-LogInfo "Mengekstrak paket kustom ke C:\laragon..."
+        
+        $tarExe = "C:\Windows\System32\tar.exe"
+        if (Test-Path -Path $tarExe) {
+            Start-Process -FilePath $tarExe -ArgumentList "-xf `"$localZip`" -C `"$laragonDir`"" -NoNewWindow -Wait
+        } else {
+            Expand-Archive -Path $localZip -DestinationPath $laragonDir -Force
+        }
+
+        if (Test-Path -Path $laragonExe) {
+            Write-LogSuccess "Laragon Custom Suite berhasil diekstrak dan dipasang di C:\laragon!"
+            Setup-LaragonEnvironment
+            return $true
+        }
+    }
+
+    # 2. Cek apakah ada Google Drive ID yang diset
+    if (-not [string]::IsNullOrWhiteSpace($GdriveId) -and $GdriveId -ne "GDRIVE_FILE_ID_HERE") {
+        Write-LogInfo "Mengunduh paket Laragon Custom dari Google Drive (ID: $GdriveId)..."
+        $tempZip = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "laragon_custom_$([Guid]::NewGuid().ToString('N')).zip"
+        
+        $downloaded = Invoke-GoogleDriveDownload -FileId $GdriveId -DestinationPath $tempZip
+        if ($downloaded) {
+            Write-LogInfo "Mengekstrak paket dari Google Drive ke C:\laragon..."
+            $tarExe = "C:\Windows\System32\tar.exe"
+            if (Test-Path -Path $tarExe) {
+                Start-Process -FilePath $tarExe -ArgumentList "-xf `"$tempZip`" -C `"$laragonDir`"" -NoNewWindow -Wait
+            } else {
+                Expand-Archive -Path $tempZip -DestinationPath $laragonDir -Force
+            }
+            Remove-Item -Path $tempZip -Force -ErrorAction SilentlyContinue
+
+            if (Test-Path -Path $laragonExe) {
+                Write-LogSuccess "Laragon Custom Suite berhasil dipasang dari Google Drive!"
+                Setup-LaragonEnvironment
+                return $true
+            }
+        }
+    }
+
+    # 3. Fallback: Instalasi Laragon 6.0.0 Resmi
+    Write-LogWarning "Paket kustom lokal atau GDrive belum tersedia, beralih ke installer resmi Laragon 6.0.0..."
+    return (Install-LaragonOfficial)
+}
+
 function Install-LaragonOfficial {
     Write-LogStep "Mengunduh & Menginstal Laragon 6.0.0 Resmi..."
     Refresh-CurrentSessionEnvironment

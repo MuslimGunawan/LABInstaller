@@ -73,5 +73,48 @@
     "directArgs": "--silent",
     "installType": "exe",
     "description": "Perangkat lunak virtualisasi open-source untuk menjalankan OS di lingkungan virtual."
+  },
+  {
+    "id": "Google.AndroidStudio",
+    "name": "Android Studio",
+    "category": "Mobile App IDE",
+    "type": "hybrid",
+    "priority": 16,
+    "wingetId": "Google.AndroidStudio",
+    "registryPattern": "Android Studio",
+    "pathCheck": "C:\\Program Files\\Android\\Android Studio\\bin\\studio64.exe",
+    "directUrl": "https://redirector.gvt1.com/edgedl/android/studio/install/2024.2.1.11/android-studio-2024.2.1.11-windows.exe",
+    "directArgs": "/S",
+    "installType": "exe",
+    "description": "IDE resmi Google untuk pengembangan aplikasi Android dan Flutter/Kotlin."
+  },
+  {
+    "id": "OSGeo.QGIS",
+    "name": "QGIS Desktop",
+    "category": "Geographic Information System",
+    "type": "hybrid",
+    "priority": 17,
+    "wingetId": "OSGeo.QGIS",
+    "registryPattern": "QGIS",
+    "pathCheck": "C:\\Program Files\\QGIS *\\bin\\qgis-bin.exe",
+    "directUrl": "https://download.qgis.org/downloads/QGIS-OSGeo4W-3.34.14-1.msi",
+    "directArgs": "/qn /norestart",
+    "installType": "msi",
+    "description": "Aplikasi Sistem Informasi Geografis (SIG/GIS) open-source untuk pemetaan dan spasial."
+  },
+  {
+    "id": "Microsoft.VisualStudio.2022.Community",
+    "name": "Visual Studio Community 2022 (C++ Desktop Dev)",
+    "category": "Native C/C++ IDE",
+    "type": "hybrid",
+    "priority": 18,
+    "wingetId": "Microsoft.VisualStudio.2022.Community",
+    "registryPattern": "(Visual Studio Community 2022|Microsoft Visual Studio)",
+    "pathCheck": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\devenv.exe",
+    "installOverride": "\"--add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended --passive --norestart\"",
+    "directUrl": "https://aka.ms/vs/17/release/vs_community.exe",
+    "directArgs": "--add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended --passive --norestart",
+    "installType": "exe",
+    "description": "IDE resmi Microsoft lengkap dengan workload Desktop development with C++ untuk praktikum Lab."
   }
 ]

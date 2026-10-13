@@ -1,18 +1,19 @@
 [
   {
     "id": "Custom.Laragon",
-    "name": "Laragon WAMP 6.0.0",
+    "name": "Laragon WAMP Custom Lab Suite",
     "category": "Web Server Environment",
     "type": "custom",
     "priority": 9,
     "registryPattern": "Laragon",
     "pathCheck": "C:\\laragon\\laragon.exe",
+    "gdriveId": "GDRIVE_FILE_ID_HERE",
     "directUrl": "https://github.com/leokhoa/laragon/releases/download/6.0.0/laragon-wamp.exe",
     "directArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=\"C:\\laragon\"",
     "installType": "exe",
-    "customHandler": "Install-LaragonOfficial",
+    "customHandler": "Install-LaragonCustomSuite",
     "postInstallHandler": "Setup-LaragonEnvironment",
-    "description": "Lingkungan pengembangan lokal cepat & portabel untuk PHP, Apache, MySQL (Versi 6.0.0 Resmi)."
+    "description": "Paket Laragon Custom Lab Komputer (PHP 8.5/8.4, MySQL 9/8, Apache, Nginx, phpMyAdmin Auto-login root, bebas warning & siap pakai)."
   },
   {
     "id": "ApacheFriends.Xampp.8.2",

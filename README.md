@@ -42,13 +42,16 @@ Sistem otomasi berbasis PowerShell dan Windows Package Manager (`winget`) untuk 
 | **P6** | **Tooling** | Composer | `Composer-Setup.exe` Resmi + Auto PATH |
 | **P7** | **Framework Tool** | Laravel Installer CLI | `composer global require laravel/installer` |
 | **P8** | **SDK** | Flutter SDK (Stable) | Git Official Repo + Auto PATH |
-| **P9** | **Web Server** | Laragon WAMP 6.0.0 | Release Resmi GitHub (Apache: 80, MySQL: 3306) |
+| **P9** | **Web Server** | Laragon WAMP Custom Suite | Bundel Custom Lab Komputer (Apache: 80, MySQL: 3306) |
 | **P10** | **Web Server** | XAMPP 8.2 | `ApacheFriends.Xampp.8.2` (Auto Port 8080 & 3307) |
 | **P11** | **IDE & Editor** | Visual Studio Code | `Microsoft.VisualStudioCode` (Winget) |
 | **P12** | **IDE & Editor** | Apache NetBeans IDE | `Apache.NetBeans` (Winget) |
 | **P13** | **Embedded IDE** | Arduino IDE | `ArduinoSA.IDE.stable` (Winget) |
 | **P14** | **Browser** | Google Chrome | `Google.Chrome` (Winget) |
 | **P15** | **Virtualization** | Oracle VirtualBox | `Oracle.VirtualBox` (Winget) |
+| **P16** | **Mobile IDE** | Android Studio | `Google.AndroidStudio` (Winget / Direct) |
+| **P17** | **GIS / Spasial** | QGIS Desktop | `OSGeo.QGIS` (Winget / Direct MSI) |
+| **P18** | **Native IDE** | Visual Studio Community 2022 | `Microsoft.VisualStudio.2022.Community` (Desktop C++) |
 
 ---
 
