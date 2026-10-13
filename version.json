@@ -1,7 +1,7 @@
 {
-  "version": "1.0.9",
+  "version": "1.0.10",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-13",
-  "description": "v1.0.9: Integrasi Pip (Python Package Installer), registrasi Scripts PATH, ensurepip bootstrap & verifikasi ekosistem Python"
+  "description": "v1.0.10: Prioritas unduhan super cepat NetBeans via GitHub CDN (Apache-NetBeans-31.exe), dukungan preferDirect engine, & Inno Setup silent switch"
 }

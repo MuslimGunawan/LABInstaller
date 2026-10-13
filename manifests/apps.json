@@ -52,14 +52,15 @@
     "category": "Java & Polyglot IDE",
     "type": "hybrid",
     "priority": 15,
+    "preferDirect": true,
     "wingetId": "Apache.NetBeans",
     "registryPattern": "NetBeans",
-    "pathCheck": "C:\\Program Files\\NetBeans*\\bin\\netbeans64.exe",
-    "directUrl": "https://archive.apache.org/dist/netbeans/netbeans-installers/25/Apache-NetBeans-25-bin-windows-x64.exe",
-    "directArgs": "--silent",
+    "pathCheck": "C:\\Program Files\\*NetBeans*\\bin\\netbeans64.exe",
+    "directUrl": "https://github.com/codelerity/netbeans-packages/releases/download/v31-build1/Apache-NetBeans-31.exe",
+    "directArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-",
     "installType": "exe",
-    "fileName": "Apache-NetBeans-25-bin-windows-x64.exe",
-    "description": "IDE resmi Apache untuk pengembangan Java, PHP, HTML5, dan C/C++."
+    "fileName": "Apache-NetBeans-31.exe",
+    "description": "IDE resmi Apache NetBeans untuk Java, PHP, HTML5, dan C/C++ (Prioritas High-Speed GitHub Server)."
   },
   {
     "id": "ArduinoSA.IDE.stable",

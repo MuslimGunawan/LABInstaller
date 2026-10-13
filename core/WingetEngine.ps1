@@ -238,6 +238,16 @@ function Invoke-PackageInstall {
         }
     }
 
+    # 2b. Jalur Direct Vendor Prioritas (Jika paket di-flag preferDirect untuk server cepat seperti GitHub Releases)
+    if ($Package.preferDirect -and -not [string]::IsNullOrWhiteSpace($Package.directUrl)) {
+        Write-LogInfo "Memprioritaskan unduhan langsung berkecepatan tinggi dari server vendor resmi/GitHub..."
+        $directSuccess = Invoke-DirectInstaller -Package $Package
+        if ($directSuccess) {
+            return $true
+        }
+        Write-LogWarning "Unduhan langsung vendor gagal. Mencoba metode alternatif..."
+    }
+
     # 3. Jalur Winget (Jika Winget sehat dan paket memiliki wingetId)
     $wingetHealthy = Test-WingetHealth
     if ($wingetHealthy -and -not [string]::IsNullOrWhiteSpace($Package.wingetId)) {
