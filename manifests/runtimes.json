@@ -1,0 +1,37 @@
+[
+  {
+    "id": "Python.Python.3.12",
+    "name": "Python 3.12",
+    "category": "Programming Runtime",
+    "type": "winget",
+    "wingetId": "Python.Python.3.12",
+    "installOverride": "/passive InstallAllUsers=1 PrependPath=1",
+    "verifyCommand": "python",
+    "verifyArgs": ["--version"],
+    "postInstallHandler": "Setup-PythonEnvironment",
+    "description": "Bahasa pemrograman tingkat tinggi untuk AI, scripting, dan backend development."
+  },
+  {
+    "id": "EclipseAdoptium.Temurin.21.JDK",
+    "name": "Java SDK (Temurin OpenJDK 21 LTS)",
+    "category": "SDK & Runtime",
+    "type": "winget",
+    "wingetId": "EclipseAdoptium.Temurin.21.JDK",
+    "verifyCommand": "java",
+    "verifyArgs": ["-version"],
+    "postInstallHandler": "Setup-JavaEnvironment",
+    "description": "Java Development Kit (JDK) resmi dari Eclipse Foundation dengan dukungan LTS."
+  },
+  {
+    "id": "PHP.PHP.8.3",
+    "name": "PHP 8.3",
+    "category": "Backend Runtime",
+    "type": "winget",
+    "wingetId": "PHP.PHP.8.3",
+    "verifyCommand": "php",
+    "verifyArgs": ["-v"],
+    "postInstallHandler": "Setup-PhpEnvironment",
+    "description": "Interpreter bahasa PHP untuk web development modern dan framework seperti Laravel."
+  }
+]
+

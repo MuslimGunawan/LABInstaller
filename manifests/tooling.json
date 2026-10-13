@@ -1,0 +1,33 @@
+[
+  {
+    "id": "Custom.Composer",
+    "name": "Composer (PHP Dependency Manager)",
+    "category": "PHP Tooling",
+    "type": "custom",
+    "customHandler": "Install-ComposerOfficial",
+    "verifyCommand": "composer",
+    "verifyArgs": ["--version"],
+    "description": "Manajer dependensi resmi untuk ekosistem PHP dan framework Laravel."
+  },
+  {
+    "id": "Custom.LaravelInstaller",
+    "name": "Laravel Installer CLI",
+    "category": "PHP Framework Tool",
+    "type": "custom",
+    "customHandler": "Install-LaravelInstallerOfficial",
+    "verifyCommand": "laravel",
+    "verifyArgs": ["--version"],
+    "description": "CLI resmi untuk membuat dan mengelola proyek framework Laravel secara instan."
+  },
+  {
+    "id": "Custom.FlutterSDK",
+    "name": "Flutter SDK (Stable)",
+    "category": "Mobile & Multi-platform SDK",
+    "type": "custom",
+    "customHandler": "Install-FlutterSdkOfficial",
+    "verifyCommand": "flutter",
+    "verifyArgs": ["--version"],
+    "description": "SDK UI resmi dari Google untuk membangun aplikasi Android, iOS, Web, dan Desktop."
+  }
+]
+

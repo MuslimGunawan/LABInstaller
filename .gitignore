@@ -1,0 +1,12 @@
+# Log files
+logs/
+*.log
+
+# Updater Staging & Backup
+.update_staging/
+.backup/
+
+# Windows temp
+Thumbs.db
+Desktop.ini
+

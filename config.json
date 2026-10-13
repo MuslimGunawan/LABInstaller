@@ -1,0 +1,25 @@
+{
+  "system": {
+    "name": "LABInstaller",
+    "githubOwner": "MuslimGunawan",
+    "githubRepo": "LABInstaller",
+    "githubBranch": "main",
+    "rawVersionUrl": "https://raw.githubusercontent.com/MuslimGunawan/LABInstaller/main/version.json",
+    "archiveUrl": "https://github.com/MuslimGunawan/LABInstaller/archive/refs/heads/main.zip",
+    "checkUpdateOnStartup": true
+  },
+  "paths": {
+    "logDirectory": "logs",
+    "backupDirectory": ".backup",
+    "stagingDirectory": ".update_staging",
+    "flutterInstallDir": "C:\\tools\\flutter",
+    "composerSetupUrl": "https://getcomposer.org/Composer-Setup.exe"
+  },
+  "settings": {
+    "acceptSourceAgreements": true,
+    "acceptPackageAgreements": true,
+    "silentInstall": true,
+    "verboseLogging": true
+  }
+}
+

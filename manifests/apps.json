@@ -1,0 +1,43 @@
+[
+  {
+    "id": "Microsoft.VisualStudioCode",
+    "name": "Visual Studio Code",
+    "category": "Code Editor & IDE",
+    "type": "winget",
+    "wingetId": "Microsoft.VisualStudioCode",
+    "verifyCommand": "code",
+    "verifyArgs": ["--version"],
+    "description": "Editor kode resmi dari Microsoft dengan dukungan ekstensi lengkap."
+  },
+  {
+    "id": "Google.Chrome",
+    "name": "Google Chrome",
+    "category": "Web Browser",
+    "type": "winget",
+    "wingetId": "Google.Chrome",
+    "verifyCommand": "chrome",
+    "verifyArgs": ["--version"],
+    "description": "Browser web resmi dari Google untuk kebutuhan browsing dan web development."
+  },
+  {
+    "id": "Oracle.VirtualBox",
+    "name": "Oracle VirtualBox",
+    "category": "Virtualization",
+    "type": "winget",
+    "wingetId": "Oracle.VirtualBox",
+    "verifyCommand": "VBoxManage",
+    "verifyArgs": ["--version"],
+    "description": "Perangkat lunak virtualisasi open-source untuk menjalankan OS di lingkungan virtual."
+  },
+  {
+    "id": "Git.Git",
+    "name": "Git for Windows",
+    "category": "Version Control",
+    "type": "winget",
+    "wingetId": "Git.Git",
+    "verifyCommand": "git",
+    "verifyArgs": ["--version"],
+    "description": "Sistem kontrol versi resmi terdistribusi untuk melacak perubahan kode sumber."
+  }
+]
+
