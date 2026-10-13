@@ -32,6 +32,8 @@
     "verifyArgs": ["--version"],
     "pathCheck": "C:\\tools\\flutter\\bin\\flutter.bat",
     "customHandler": "Install-FlutterSdkOfficial",
+    "bundleUrl": "https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_3.47.7-stable.zip",
+    "manualDocs": "https://docs.flutter.dev/install/manual",
     "description": "SDK UI resmi dari Google untuk membangun aplikasi Android, iOS, Web, dan Desktop."
   }
 ]

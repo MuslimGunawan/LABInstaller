@@ -172,52 +172,96 @@ function Install-LaravelInstallerOfficial {
 
 function Install-FlutterSdkOfficial {
     param (
-        [string]$TargetDir = "C:\tools\flutter"
+        [string]$TargetDir = "C:\tools\flutter",
+        [string]$BundleUrl = "https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_3.47.7-stable.zip"
     )
 
-    Write-LogStep "Menginstal Flutter SDK (Channel Stable) resmi..."
+    Write-LogStep "Menginstal Flutter SDK (Channel Stable) resmi dari Google Storage Bundle..."
     Refresh-CurrentSessionEnvironment
 
-    $gitCmd = Get-Command "git" -ErrorAction SilentlyContinue
+    $binDir = Join-Path -Path $TargetDir -ChildPath "bin"
+    $flutterBat = Join-Path -Path $binDir -ChildPath "flutter.bat"
 
-    if (Test-Path -Path (Join-Path -Path $TargetDir -ChildPath "bin\flutter.bat")) {
-        Write-LogInfo "Flutter SDK sudah ada di $TargetDir. Memeriksa pembaruan..."
-        $binDir = Join-Path -Path $TargetDir -ChildPath "bin"
+    if (Test-Path -Path $flutterBat) {
+        Write-LogInfo "Flutter SDK sudah terpasang di $TargetDir."
         Add-DirectoryToPath -PathToAdd $binDir -Scope "Machine" | Out-Null
-        
-        Write-LogInfo "Menjalankan flutter upgrade..."
-        Start-Process -FilePath (Join-Path -Path $binDir -ChildPath "flutter.bat") -ArgumentList "upgrade" -NoNewWindow -Wait
-        Write-LogSuccess "Flutter SDK berhasil diperbarui."
+        Refresh-CurrentSessionEnvironment
+        Write-LogSuccess "Flutter SDK terverifikasi aktif."
         return $true
     }
 
-    if ($gitCmd) {
+    $appsDir = Get-AppStorageDirectory
+    $zipFileName = "flutter_windows_3.47.7-stable.zip"
+    $localZip = Join-Path -Path $appsDir -ChildPath $zipFileName
+
+    if (-not (Test-Path -Path $localZip) -or ((Get-Item $localZip).Length -lt 500000000)) {
+        Write-LogInfo "Mengunduh Flutter SDK bundle resmi dari Google Cloud Storage..."
+        Write-LogInfo "URL: $BundleUrl"
+        Write-LogInfo "Menyimpan ke cache lokal: $localZip (~1.8 GB)"
+
         try {
-            $parentDir = Split-Path -Parent $TargetDir
-            if (-not (Test-Path -Path $parentDir)) {
-                New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
-            }
-
-            Write-LogInfo "Mengkloning Flutter repository resmi ke: $TargetDir"
-            $gitProcess = Start-Process -FilePath $gitCmd.Source -ArgumentList "clone -b stable https://github.com/flutter/flutter.git `"$TargetDir`"" -NoNewWindow -Wait -PassThru
-
-            if ($gitProcess.ExitCode -eq 0) {
-                $binDir = Join-Path -Path $TargetDir -ChildPath "bin"
-                Add-DirectoryToPath -PathToAdd $binDir -Scope "Machine" | Out-Null
-                Refresh-CurrentSessionEnvironment
-                Write-LogSuccess "Flutter SDK berhasil diinstal via Git Clone resmi."
-                return $true
-            } else {
-                Write-LogError "Git clone Flutter gagal dengan kode: $($gitProcess.ExitCode)"
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            $wc = New-Object System.Net.WebClient
+            $wc.Headers.Add("User-Agent", "LABInstaller")
+            $wc.DownloadFile($BundleUrl, $localZip)
+            Write-LogSuccess "Unduhan Flutter SDK bundle selesai."
+        }
+        catch {
+            Write-LogWarning "Gagal mengunduh via WebClient ($_) - mencoba BITS/Invoke-WebRequest..."
+            try {
+                Invoke-WebRequest -Uri $BundleUrl -OutFile $localZip -UseBasicParsing
+            } catch {
+                Write-LogError "Gagal mengunduh bundle Flutter resmi - $_"
                 return $false
             }
         }
-        catch {
-            Write-LogError "Gagal menginstal Flutter via Git - $_"
-            return $false
+    } else {
+        Write-LogSuccess "Ditemukan cache lokal Flutter SDK bundle di: $localZip"
+    }
+
+    # Ekstraksi ke direktori target
+    # Zip resmi dari Google berisi struktur folder root "flutter/..."
+    $parentDir = Split-Path -Parent $TargetDir
+    if (-not (Test-Path -Path $parentDir)) {
+        New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+    }
+
+    Write-LogInfo "Mengekstrak Flutter SDK ke $parentDir..."
+    $sevenZip = "C:\Program Files\7-Zip\7z.exe"
+    if (Test-Path $sevenZip) {
+        Write-LogInfo "Menggunakan 7-Zip untuk ekstraksi berkecepatan tinggi..."
+        $p = Start-Process -FilePath $sevenZip -ArgumentList "x `"$localZip`" -o`"$parentDir`" -y" -NoNewWindow -Wait -PassThru
+        if ($p.ExitCode -ne 0) {
+            Write-LogWarning "7-Zip keluar dengan kode $($p.ExitCode), beralih ke Expand-Archive..."
+            Expand-Archive -Path $localZip -DestinationPath $parentDir -Force
         }
     } else {
-        Write-LogError "Git diperlukan untuk instalasi resmi Flutter SDK. Mohon instal Git terlebih dahulu."
+        Write-LogInfo "Mengekstrak arsip menggunakan Expand-Archive bawaan..."
+        Expand-Archive -Path $localZip -DestinationPath $parentDir -Force
+    }
+
+    # Tangani jika struktur ekstraksi bersarang (flutter\flutter)
+    $nestedFlutter = Join-Path -Path $TargetDir -ChildPath "flutter\bin\flutter.bat"
+    if ((-not (Test-Path $flutterBat)) -and (Test-Path $nestedFlutter)) {
+        $binDir = Join-Path -Path $TargetDir -ChildPath "flutter\bin"
+        $flutterBat = $nestedFlutter
+    }
+
+    if (Test-Path -Path $flutterBat) {
+        Write-LogInfo "Mendaftarkan $binDir ke System PATH..."
+        Add-DirectoryToPath -PathToAdd $binDir -Scope "Machine" | Out-Null
+        Refresh-CurrentSessionEnvironment
+
+        # Precache dan inisialisasi artifact Flutter
+        try {
+            Write-LogInfo "Menginisialisasi artifact Flutter..."
+            Start-Process -FilePath $flutterBat -ArgumentList "--version" -NoNewWindow -Wait
+        } catch { }
+
+        Write-LogSuccess "Flutter SDK Stable resmi berhasil dipasang di $TargetDir!"
+        return $true
+    } else {
+        Write-LogError "Ekstraksi selesai tetapi berkas $flutterBat tidak ditemukan."
         return $false
     }
 }

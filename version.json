@@ -1,7 +1,7 @@
 {
-  "version": "1.0.7",
+  "version": "1.0.8",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-13",
-  "description": "v1.0.7: Multi-Mirror Google Drive download engine dengan fallback vendor/WinGet, integrasi 7-Zip & WinRAR teraktivasi (rarreg.key), Cisco Packet Tracer 9, Oracle VirtualBox + ExtPack, dan Laragon Custom Suite"
+  "description": "v1.0.8: Migrasi Flutter SDK ke Google Storage Bundle resmi (flutter_windows_3.47.7-stable.zip) dengan offline cache di apps/ dan ekstraksi cepat 7-Zip"
 }
