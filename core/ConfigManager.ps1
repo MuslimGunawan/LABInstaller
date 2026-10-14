@@ -28,6 +28,9 @@ function Start-FullEnvironmentConfiguration {
     # 6. Konfigurasi Lisensi & Kompatibilitas Windows 11 Borland Delphi 7
     Repair-Delphi7LicenseAndEnvironment
 
+    # 7. Konfigurasi Ekosistem Flutter & Android SDK (Bebas Error flutter doctor)
+    Configure-FlutterAndAndroidEnvironment
+
     Write-LogSuccess "Semua konfigurasi port, firewall, shortcut desktop, dan environment berhasil diterapkan secara optimal!"
 }
 
@@ -1218,6 +1221,137 @@ function Repair-Delphi7LicenseAndEnvironment {
     }
 
     Write-LogSuccess "Lisensi resmi & kompatibilitas Windows 11 untuk Borland Delphi 7 berhasil diselaraskan!"
+    return $true
+}
+
+function Configure-FlutterAndAndroidEnvironment {
+    Write-LogStep "Memeriksa & Menyelaraskan Ekosistem Flutter & Android SDK (flutter doctor)..."
+
+    # 1. Cari binary Flutter
+    $flutterExe = $null
+    $flutterCandidates = @(
+        "C:\tools\flutter\bin\flutter.bat",
+        "$env:LOCALAPPDATA\flutter\bin\flutter.bat",
+        "C:\flutter\bin\flutter.bat"
+    )
+    foreach ($fc in $flutterCandidates) {
+        if (Test-Path -Path $fc) {
+            $flutterExe = $fc
+            break
+        }
+    }
+    if (-not $flutterExe) {
+        $cmdObj = Get-Command "flutter" -ErrorAction SilentlyContinue
+        if ($cmdObj) { $flutterExe = $cmdObj.Source }
+    }
+
+    if (-not $flutterExe) {
+        Write-LogInfo "Flutter SDK belum terpasang di sistem. Melewati konfigurasi Flutter."
+        return $false
+    }
+
+    Write-LogInfo "Flutter SDK terdeteksi di: $flutterExe"
+
+    # 2. Cari instalasi Android Studio
+    $studioDir = $null
+    $studioCandidates = @(
+        "C:\Program Files\Android\Android Studio",
+        "C:\Program Files (x86)\Android\Android Studio",
+        "$env:LOCALAPPDATA\Programs\Android Studio"
+    )
+    foreach ($sc in $studioCandidates) {
+        if (Test-Path -Path (Join-Path -Path $sc -ChildPath "bin\studio64.exe")) {
+            $studioDir = $sc
+            break
+        }
+    }
+
+    if ($studioDir) {
+        Write-LogInfo "Android Studio terdeteksi di: $studioDir"
+        try {
+            & $flutterExe config --android-studio-dir "$studioDir" 2>$null | Out-Null
+            Write-LogSuccess "Flutter dikonfigurasi dengan Android Studio: $studioDir"
+        } catch {}
+
+        # Konfigurasi JDK/JBR bawaan Android Studio jika ada
+        $jbrDir = Join-Path -Path $studioDir -ChildPath "jbr"
+        if (Test-Path -Path (Join-Path -Path $jbrDir -ChildPath "bin\java.exe")) {
+            try {
+                & $flutterExe config --jdk-dir "$jbrDir" 2>$null | Out-Null
+                [Environment]::SetEnvironmentVariable("JAVA_HOME", $jbrDir, "Machine")
+                Write-LogSuccess "Flutter dikonfigurasi dengan JDK bawaan Android Studio ($jbrDir)"
+            } catch {}
+        }
+    }
+
+    # 3. Cari dan Siapkan Android SDK
+    $sdkDir = $null
+    $sdkCandidates = @(
+        (Join-Path -Path $env:LOCALAPPDATA -ChildPath "Android\Sdk"),
+        "C:\Android\Sdk",
+        "C:\Android\android-sdk",
+        (Join-Path -Path $env:USERPROFILE -ChildPath "AppData\Local\Android\Sdk"),
+        "C:\Users\Public\Android\Sdk"
+    )
+    foreach ($skc in $sdkCandidates) {
+        if (Test-Path -Path $skc) {
+            $sdkDir = $skc
+            break
+        }
+    }
+
+    # Jika folder Sdk belum ada, buat direktori default standar
+    if (-not $sdkDir) {
+        $sdkDir = Join-Path -Path $env:LOCALAPPDATA -ChildPath "Android\Sdk"
+        if (-not (Test-Path -Path $sdkDir)) {
+            New-Item -ItemType Directory -Path $sdkDir -Force | Out-Null
+        }
+    }
+
+    # Pastikan platform-tools (adb.exe) tersedia
+    $adbPath = Join-Path -Path $sdkDir -ChildPath "platform-tools\adb.exe"
+    if (-not (Test-Path -Path $adbPath)) {
+        Write-LogInfo "Mengunduh platform-tools (adb) resmi Google untuk melengkapi Android SDK..."
+        $ptZip = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "platform-tools.zip"
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            (New-Object Net.WebClient).DownloadFile("https://dl.google.com/android/repository/platform-tools-latest-windows.zip", $ptZip)
+            if (Test-Path -Path $ptZip) {
+                Expand-Archive -Path $ptZip -DestinationPath $sdkDir -Force
+                Remove-Item -Path $ptZip -Force -ErrorAction SilentlyContinue
+                Write-LogSuccess "Platform-tools (adb.exe) berhasil dipasang ke $sdkDir\platform-tools"
+            }
+        } catch {
+            Write-LogWarning "Tidak dapat mengunduh platform-tools secara otomatis: $_"
+        }
+    }
+
+    # Daftarkan variabel lingkungan ANDROID_HOME & ANDROID_SDK_ROOT
+    try {
+        [Environment]::SetEnvironmentVariable("ANDROID_HOME", $sdkDir, "Machine")
+        [Environment]::SetEnvironmentVariable("ANDROID_SDK_ROOT", $sdkDir, "Machine")
+        $env:ANDROID_HOME = $sdkDir
+        $env:ANDROID_SDK_ROOT = $sdkDir
+
+        & $flutterExe config --android-sdk "$sdkDir" 2>$null | Out-Null
+        Write-LogSuccess "Flutter dikonfigurasi dengan Android SDK: $sdkDir"
+
+        # Tambahkan platform-tools ke PATH sistem
+        $ptDir = Join-Path -Path $sdkDir -ChildPath "platform-tools"
+        if (Test-Path -Path $ptDir) {
+            Add-DirectoryToPath -PathToAdd $ptDir -Scope "Machine" | Out-Null
+        }
+    } catch {}
+
+    # 4. Otomatisasi Lisensi Android (Accept all licenses)
+    try {
+        Write-LogInfo "Menyetujui lisensi resmi Android SDK (flutter doctor --android-licenses)..."
+        $yesInputs = ("y`n" * 15)
+        $yesInputs | & $flutterExe doctor --android-licenses 2>$null | Out-Null
+        Write-LogSuccess "Pemeriksaan lisensi Android SDK selesai."
+    } catch {}
+
+    Write-LogSuccess "Ekosistem Flutter & Android Toolchain berhasil diselaraskan!"
     return $true
 }
 

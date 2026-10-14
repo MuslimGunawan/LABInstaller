@@ -1,7 +1,7 @@
 {
-  "version": "1.0.25",
+  "version": "1.0.26",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-14",
-  "description": "v1.0.25: Pembaruan daftar mirror Google Drive aktif untuk paket Borland Delphi 7 Enterprise & VisionLab VCL."
+  "description": "v1.0.26: Perbaikan deteksi Visual Studio Community 2022 (isolasi dari VS Code), pengoptimalan bootstrapper C++ Desktop dev, dan otomatisasi konfigurasi Flutter SDK & Android Toolchain (adb, JDK, licenses) untuk flutter doctor 100% centang hijau."
 }

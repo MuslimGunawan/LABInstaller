@@ -304,8 +304,8 @@ function Invoke-WingetInstall {
         $pinfo.CreateNoWindow = $true
 
         $process = [System.Diagnostics.Process]::Start($pinfo)
-        # Timeout 10 menit untuk download besar
-        $completed = $process.WaitForExit(600000)
+        $timeoutMs = if ($Package.id -match "VisualStudio") { 1800000 } else { 900000 }
+        $completed = $process.WaitForExit($timeoutMs)
 
         if ($completed -and ($process.ExitCode -eq 0 -or $process.ExitCode -eq 2316632107)) {
             Write-LogSuccess "$($Package.name) berhasil dipasang via WinGet (ExitCode: 0)."
