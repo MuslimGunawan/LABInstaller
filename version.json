@@ -1,7 +1,7 @@
 {
-  "version": "1.0.22",
+  "version": "1.0.23",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-14",
-  "description": "v1.0.22: Otomatisasi pendaftaran AeDebug (eliminasi dialog Just-in-Time Debugger Delphi 7 bordbg70.exe), verifikasi menyeluruh ketersediaan paket VisionLab/VideoLab BPL di Component Palette."
+  "description": "v1.0.23: Pembaruan deteksi integritas VisionLab (pathCheck ke VisionLabDsnD7.bpl), sinkronisasi otomatis berkas BPL & LabPacks OpenCV ke Delphi 7, dan pendaftaran lengkap Known Packages ke Component Palette."
 }

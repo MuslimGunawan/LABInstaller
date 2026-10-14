@@ -198,7 +198,7 @@
     "priority": 23,
     "customHandler": "Setup-Delphi7VisionLabHandler",
     "registryPattern": "(Borland Delphi 7|Delphi 7)",
-    "pathCheck": "C:\\Program Files*\\Borland\\Delphi7\\Bin\\delphi32.exe",
+    "pathCheck": "C:\\Program Files*\\Borland\\Delphi7\\Projects\\Bpl\\VisionLabDsnD7.bpl",
     "fileName": "Delphi7_VisionLab_Bundle.zip",
     "gdriveMirrors": [
       "1wpGnPF1BvZBzoHk5FFgrXUaAvjpMWFP2",

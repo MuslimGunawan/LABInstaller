@@ -902,10 +902,86 @@ function Setup-Delphi7VisionLabHandler {
             $vp = Start-Process -FilePath $visionSetup -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" -Wait -PassThru -NoNewWindow
             Stop-Job -Job $watcher -ErrorAction SilentlyContinue | Out-Null
             Remove-Job -Job $watcher -ErrorAction SilentlyContinue | Out-Null
-            Write-LogSuccess "Komponen VisionLab VCL 4.5 berhasil dipasang ke Borland Delphi 7."
         }
 
-        # 10. Verifikasi Akhir
+        # 10. Sinkronisasi Berkas BPL & Direktori LabPacks (OpenCV) ke Direktori Delphi 7
+        $srcBpl = Join-Path -Path $tempExtract -ChildPath "Delphi7\program files\Borland\Delphi7\Projects\Bpl"
+        $dstBpl = Join-Path -Path $installDir -ChildPath "Projects\Bpl"
+        if (Test-Path -Path $srcBpl) {
+            if (-not (Test-Path -Path $dstBpl)) { New-Item -ItemType Directory -Path $dstBpl -Force | Out-Null }
+            Copy-Item -Path (Join-Path -Path $srcBpl -ChildPath "*") -Destination $dstBpl -Recurse -Force -ErrorAction SilentlyContinue
+        }
+
+        $srcLab = Join-Path -Path $tempExtract -ChildPath "Delphi7\program files\Borland\Delphi7\LabPacks"
+        $dstLab = Join-Path -Path $installDir -ChildPath "LabPacks"
+        if (Test-Path -Path $srcLab) {
+            if (-not (Test-Path -Path $dstLab)) { New-Item -ItemType Directory -Path $dstLab -Force | Out-Null }
+            Copy-Item -Path (Join-Path -Path $srcLab -ChildPath "*") -Destination $dstLab -Recurse -Force -ErrorAction SilentlyContinue
+        }
+
+        # 11. Registrasi Resmi Paket Komponen VisionLab & VideoLab ke Delphi Component Palette (Known Packages)
+        $knownPackages = @{
+            (Join-Path -Path $dstBpl -ChildPath "OpenWirePkgD7.bpl")             = "OpenWire Package"
+            (Join-Path -Path $dstBpl -ChildPath "OpenWireDsnD7.bpl")             = "OpenWire Pin Editors"
+            (Join-Path -Path $dstBpl -ChildPath "SignalLabBasicPkgD7.bpl")       = "SignalLab Basic Package"
+            (Join-Path -Path $dstBpl -ChildPath "SignalLabBasicDsnD7.bpl")       = "SignalLab Basic Design Package"
+            (Join-Path -Path $dstBpl -ChildPath "TimingLabBasicPkgD7.bpl")       = "TimingLab Basic Package"
+            (Join-Path -Path $dstBpl -ChildPath "TimingLabBasicDsnD7.bpl")       = "TimingLab Basic Design Package"
+            (Join-Path -Path $dstBpl -ChildPath "AudioLabBasicPkgD7.bpl")        = "AudioLab Basic Package"
+            (Join-Path -Path $dstBpl -ChildPath "AudioLabBasicDsnD7.bpl")        = "AudioLab Basic Design Package"
+            (Join-Path -Path $dstBpl -ChildPath "MediaLabBasicPkgD7.bpl")        = "MediaLab Basic Package"
+            (Join-Path -Path $dstBpl -ChildPath "MediaLabBasicDsnD7.bpl")        = "MediaLab Basic Design Package"
+            (Join-Path -Path $dstBpl -ChildPath "VideoLabBasicPkgD7.bpl")        = "VideoLab Basic Package"
+            (Join-Path -Path $dstBpl -ChildPath "VideoLabBasicDsnD7.bpl")        = "VideoLab Basic Design Package"
+            (Join-Path -Path $dstBpl -ChildPath "VideoLabAdditionalPkgD7.bpl")   = "VideoLab Additional Package"
+            (Join-Path -Path $dstBpl -ChildPath "VideoLabAdditionalDsnD7.bpl")   = "VideoLab Additional Design Package"
+            (Join-Path -Path $dstBpl -ChildPath "IntelligenceLabBasicPkgD7.bpl") = "IntelligenceLab Basic Package"
+            (Join-Path -Path $dstBpl -ChildPath "IntelligenceLabBasicDsnD7.bpl") = "IntelligenceLab Basic Design Package"
+            (Join-Path -Path $dstBpl -ChildPath "VisionLabPkgD7.bpl")            = "VisionLab Package"
+            (Join-Path -Path $dstBpl -ChildPath "VisionLabDsnD7.bpl")            = "VisionLab Design Package"
+        }
+
+        $kpTargets = @(
+            "HKCU:\Software\Borland\Delphi\7.0\Known Packages",
+            "HKLM:\SOFTWARE\WOW6432Node\Borland\Delphi\7.0\Known Packages",
+            "HKLM:\SOFTWARE\Borland\Delphi\7.0\Known Packages"
+        )
+        foreach ($kpPath in $kpTargets) {
+            try {
+                if (-not (Test-Path -Path $kpPath)) { New-Item -Path $kpPath -Force | Out-Null }
+                foreach ($k in $knownPackages.Keys) {
+                    Set-ItemProperty -Path $kpPath -Name $k -Value $knownPackages[$k] -Force -ErrorAction SilentlyContinue | Out-Null
+                }
+            } catch {}
+        }
+
+        # Perbarui Library Search Path Delphi agar modul unit (.dcu, .pas, .bpl) VisionLab dapat dikompilasi
+        $libTargets = @(
+            "HKCU:\Software\Borland\Delphi\7.0\Library",
+            "HKLM:\SOFTWARE\WOW6432Node\Borland\Delphi\7.0\Library",
+            "HKLM:\SOFTWARE\Borland\Delphi\7.0\Library"
+        )
+        foreach ($lp in $libTargets) {
+            try {
+                if (-not (Test-Path -Path $lp)) { New-Item -Path $lp -Force | Out-Null }
+                $currSearch = (Get-ItemProperty -Path $lp -Name "Search Path" -ErrorAction SilentlyContinue)."Search Path"
+                $extraPaths = @("`$(DELPHI)\Projects\Bpl", "`$(DELPHI)\OpenWire", "`$(DELPHI)\LabPacks")
+                if ($currSearch) {
+                    foreach ($ep in $extraPaths) {
+                        if ($currSearch -notmatch [regex]::Escape($ep)) {
+                            $currSearch += ";$ep"
+                        }
+                    }
+                } else {
+                    $currSearch = "`$(DELPHI)\Lib;`$(DELPHI)\Bin;`$(DELPHI)\Imports;`$(DELPHI)\Projects\Bpl;`$(DELPHI)\OpenWire;`$(DELPHI)\LabPacks"
+                }
+                Set-ItemProperty -Path $lp -Name "Search Path" -Value $currSearch -Force -ErrorAction SilentlyContinue | Out-Null
+            } catch {}
+        }
+
+        Write-LogSuccess "Komponen VisionLab & VideoLab VCL berhasil didaftarkan ke Component Palette Delphi 7."
+
+        # 12. Verifikasi Akhir
         if (Test-Path -Path $delphiExe) {
             Write-LogSuccess "Borland Delphi 7 Enterprise & VisionLab VCL BERHASIL DIPASANG!"
 
