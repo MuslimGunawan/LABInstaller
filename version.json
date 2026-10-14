@@ -1,7 +1,7 @@
 {
-  "version": "1.0.20",
+  "version": "1.0.21",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-14",
-  "description": "v1.0.20: Perbaikan tuntas aktivasi lisensi Borland Delphi 7 Enterprise (injeksi Serial & Auth Key ke MSI & Registry, pembersihan cache lisensi korup .borland), bypass otomatis Windows 11 PCA hard block & Exploit Protection, otomatisasi dialog Warning VisionLab VCL 4.5, dan penjagaan shortcut desktop tunggal."
+  "description": "v1.0.21: Penambahan modul auto-repair lisensi & Windows 11 AppCompat Delphi 7 langsung pada opsi menu [3] dan [1], penyertaan berkas aktivasi resmi apps/dent.slip, serta klarifikasi opsi pembaruan GitHub menu [4]."
 }

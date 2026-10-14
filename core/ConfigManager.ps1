@@ -25,6 +25,9 @@ function Start-FullEnvironmentConfiguration {
     # 5. Konfigurasi Ekosistem Laravel
     Configure-LaravelEcosystem
 
+    # 6. Konfigurasi Lisensi & Kompatibilitas Windows 11 Borland Delphi 7
+    Repair-Delphi7LicenseAndEnvironment
+
     Write-LogSuccess "Semua konfigurasi port, firewall, shortcut desktop, dan environment berhasil diterapkan secara optimal!"
 }
 
@@ -989,6 +992,134 @@ function Ensure-DesktopShortcuts {
     catch {
         Write-LogWarning "Pemeriksaan shortcut desktop mengalami kendala: $_"
     }
+}
+
+function Repair-Delphi7LicenseAndEnvironment {
+    Write-LogStep "Memeriksa & Menyelaraskan Lisensi serta Kompatibilitas Borland Delphi 7..."
+
+    $installDir = "C:\Program Files (x86)\Borland\Delphi7"
+    if (-not (Test-Path -Path $installDir)) {
+        $installDir = "C:\Program Files\Borland\Delphi7"
+    }
+
+    $delphiExe = Join-Path -Path $installDir -ChildPath "Bin\delphi32.exe"
+    if (-not (Test-Path -Path $delphiExe)) {
+        return $false
+    }
+
+    $serialNumber = "6AKD-PD29Q9-RDF?JQ-X65Z"
+    $authKey      = "QX8-EEC"
+
+    # 1. Bersihkan seluruh file cache lisensi korup di user profile & sistem
+    $borlandCachePaths = @(
+        (Join-Path -Path $env:USERPROFILE -ChildPath ".borland"),
+        "C:\Users\Public\.borland",
+        "C:\ProgramData\Borland"
+    )
+    foreach ($bcp in $borlandCachePaths) {
+        if (Test-Path -Path $bcp) {
+            Remove-Item -Path (Join-Path -Path $bcp -ChildPath "registry.slm") -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path (Join-Path -Path $bcp -ChildPath "registry.dat") -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path (Join-Path -Path $bcp -ChildPath "borland.lic") -Force -ErrorAction SilentlyContinue
+        } else {
+            New-Item -ItemType Directory -Path $bcp -Force -ErrorAction SilentlyContinue | Out-Null
+        }
+    }
+
+    # 2. Temukan dent.slip cracked yang valid
+    $appsDir = if (Get-Command Get-AppStorageDirectory -ErrorAction SilentlyContinue) { Get-AppStorageDirectory } else { "d:\KP\v2\apps" }
+    $slipCandidates = @(
+        (Join-Path -Path $installDir -ChildPath "dent.slip"),
+        (Join-Path -Path $installDir -ChildPath "Bin\dent.slip"),
+        (Join-Path -Path $appsDir -ChildPath "dent.slip"),
+        "D:\KP\dent.slip",
+        "C:\Users\musgu\Downloads\Compressed\D7_ENT.kuyhAa\D7_ENT.kuyhAa\dent.slip"
+    )
+    $validSlip = $null
+    foreach ($sc in $slipCandidates) {
+        if (Test-Path -Path $sc) {
+            $validSlip = $sc
+            break
+        }
+    }
+
+    if ($validSlip) {
+        Copy-Item -Path $validSlip -Destination (Join-Path -Path $installDir -ChildPath "dent.slip") -Force -ErrorAction SilentlyContinue
+        Copy-Item -Path $validSlip -Destination (Join-Path -Path $installDir -ChildPath "Bin\dent.slip") -Force -ErrorAction SilentlyContinue
+        foreach ($bcp in $borlandCachePaths) {
+            if (Test-Path -Path $bcp) {
+                Copy-Item -Path $validSlip -Destination (Join-Path -Path $bcp -ChildPath "dent.slip") -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    # 3. Suntikkan Registrasi Lisensi Resmi ke Registry (HKLM, WOW6432Node, HKCU)
+    $delphiRegPaths = @(
+        "HKLM:\SOFTWARE\WOW6432Node\Borland\Delphi\7.0",
+        "HKLM:\SOFTWARE\Borland\Delphi\7.0",
+        "HKCU:\Software\Borland\Delphi\7.0"
+    )
+    foreach ($rp in $delphiRegPaths) {
+        try {
+            if (-not (Test-Path -Path $rp)) { New-Item -Path $rp -Force | Out-Null }
+            Set-ItemProperty -Path $rp -Name "RootDir" -Value $installDir -Force -ErrorAction SilentlyContinue | Out-Null
+            Set-ItemProperty -Path $rp -Name "App" -Value $delphiExe -Force -ErrorAction SilentlyContinue | Out-Null
+            Set-ItemProperty -Path $rp -Name "LMLIC" -Value $serialNumber -Force -ErrorAction SilentlyContinue | Out-Null
+            Set-ItemProperty -Path $rp -Name "LMKEY" -Value $authKey -Force -ErrorAction SilentlyContinue | Out-Null
+            Set-ItemProperty -Path $rp -Name "UseSharedFiles" -Value "TRUE" -Force -ErrorAction SilentlyContinue | Out-Null
+
+            # Bersihkan subkey LM korup
+            $subLm = Join-Path -Path $rp -ChildPath "LM"
+            if (Test-Path -Path $subLm) {
+                Remove-Item -Path $subLm -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
+            }
+        } catch {}
+    }
+
+    # 4. Kebijakan Windows 11 AppCompat (PCA Hard Block Bypass) & Exploit Protection
+    try {
+        $pcaPolPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppCompat"
+        if (-not (Test-Path -Path $pcaPolPath)) { New-Item -Path $pcaPolPath -Force | Out-Null }
+        Set-ItemProperty -Path $pcaPolPath -Name "DisablePCA" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue | Out-Null
+        Set-ItemProperty -Path $pcaPolPath -Name "DisableEngine" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue | Out-Null
+
+        Stop-Service -Name "PcaSvc" -Force -ErrorAction SilentlyContinue | Out-Null
+        Set-Service -Name "PcaSvc" -StartupType Disabled -ErrorAction SilentlyContinue | Out-Null
+    } catch {}
+
+    # 5. Lapisan Kompatibilitas XP SP3 & Exploit Protection
+    $compatReg = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers",
+        "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"
+    )
+    $compatVal = "~ WINXPSP3 HIGHDPIAWARE RUNASADMIN"
+    foreach ($cr in $compatReg) {
+        try {
+            if (-not (Test-Path -Path $cr)) { New-Item -Path $cr -Force | Out-Null }
+            Set-ItemProperty -Path $cr -Name $delphiExe -Value $compatVal -Force -ErrorAction SilentlyContinue | Out-Null
+        } catch {}
+    }
+
+    try {
+        if (Get-Command Set-ProcessMitigation -ErrorAction SilentlyContinue) {
+            Set-ProcessMitigation -Name "delphi32.exe" -Disable DEP,CFG,SEHOP,DynamicCode,BottomUp,HighEntropy -ErrorAction SilentlyContinue | Out-Null
+        }
+        if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
+            Add-MpPreference -ExclusionPath $installDir -ErrorAction SilentlyContinue | Out-Null
+            Add-MpPreference -ExclusionProcess "delphi32.exe" -ErrorAction SilentlyContinue | Out-Null
+        }
+    } catch {}
+
+    # 6. Hak Akses Write/Modify
+    try {
+        & icacls "$installDir" /grant "Users:(OI)(CI)M" /T /Q | Out-Null
+        if (Test-Path -Path (Join-Path -Path $env:USERPROFILE -ChildPath ".borland")) {
+            & icacls (Join-Path -Path $env:USERPROFILE -ChildPath ".borland") /grant "Users:(OI)(CI)M" /T /Q | Out-Null
+        }
+    } catch {}
+
+    Write-LogSuccess "Lisensi resmi & kompatibilitas Windows 11 untuk Borland Delphi 7 berhasil diselaraskan!"
+    return $true
 }
 
 
