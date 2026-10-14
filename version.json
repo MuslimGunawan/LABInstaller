@@ -1,7 +1,7 @@
 {
-  "version": "1.0.29",
+  "version": "1.0.30",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-14",
-  "description": "v1.0.29: Perbaikan kompatibilitas LF/CRLF line endings pada skrip aktivasi Windows & Office (eliminasi error massgrave LF check) dengan penegakan CRLF otomatis dan bypass findstr."
+  "description": "v1.0.30: Penambahan paket Microsoft 365 (Office C2R online installer & auto Ohook permanent activation), integrasi Lab Keep-Alive Guard (Triple-Guard anti-sleep & anti-idle shutdown 10 menit), ikon desktop Office, serta perbaikan estetika warna konsol aktivasi."
 }

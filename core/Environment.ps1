@@ -143,3 +143,111 @@ public class WinAPI {
         # Fallback senyap jika API user32 tidak terjangkau (misal session non-GUI)
     }
 }
+
+# ==============================================================================
+# LAB KEEPALIVE GUARD (ANTI-SLEEP & ANTI-IDLE SHUTDOWN)
+# Mengantisipasi komputer Lab yang mati/tidur otomatis jika idle selama 10 menit
+# ==============================================================================
+$global:LabKeepAliveActive = $false
+
+function Initialize-LabKeepAliveAPI {
+    $csharpCode = @"
+using System;
+using System.Threading;
+using System.Runtime.InteropServices;
+
+public class LabKeepAliveAPI {
+    [Flags]
+    public enum EXECUTION_STATE : uint {
+        ES_AWAYMODE_REQUIRED = 0x00000040,
+        ES_CONTINUOUS        = 0x80000000,
+        ES_DISPLAY_REQUIRED  = 0x00000002,
+        ES_SYSTEM_REQUIRED   = 0x00000001
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    public static extern EXECUTION_STATE SetThreadExecutionState(EXECUTION_STATE esFlags);
+
+    [DllImport("user32.dll")]
+    public static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo);
+
+    private const uint MOUSEEVENTF_MOVE = 0x0001;
+    private static Timer _timer;
+
+    public static void StartHeartbeat(int intervalMs = 45000) {
+        if (_timer == null) {
+            _timer = new Timer(OnTick, null, 0, intervalMs);
+        }
+    }
+
+    public static void StopHeartbeat() {
+        if (_timer != null) {
+            _timer.Dispose();
+            _timer = null;
+        }
+        try {
+            SetThreadExecutionState(EXECUTION_STATE.ES_CONTINUOUS);
+        } catch {}
+    }
+
+    private static void OnTick(object state) {
+        try {
+            // Jaga sistem dan layar tetap aktif (mencegah sleep/hibernasi Windows)
+            SetThreadExecutionState(EXECUTION_STATE.ES_CONTINUOUS | EXECUTION_STATE.ES_SYSTEM_REQUIRED | EXECUTION_STATE.ES_DISPLAY_REQUIRED);
+            // Simulasikan pergerakan mouse 1 piksel dan kembalikan seketika (mereset GetLastInputInfo idle timer ke 0)
+            mouse_event(MOUSEEVENTF_MOVE, 1, 1, 0, UIntPtr.Zero);
+            mouse_event(MOUSEEVENTF_MOVE, -1, -1, 0, UIntPtr.Zero);
+        } catch {}
+    }
+}
+"@
+    if (-not ([System.Management.Automation.PSTypeName]'LabKeepAliveAPI').Type) {
+        Add-Type -TypeDefinition $csharpCode -ErrorAction SilentlyContinue
+    }
+}
+
+function Start-LabKeepAliveGuard {
+    if ($global:LabKeepAliveActive) {
+        return
+    }
+
+    try {
+        Initialize-LabKeepAliveAPI
+
+        # 1. Mulai Heartbeat timer C# (setiap 45 detik pulsa mouse & SetThreadExecutionState)
+        if (([System.Management.Automation.PSTypeName]'LabKeepAliveAPI').Type) {
+            [LabKeepAliveAPI]::StartHeartbeat(45000)
+        }
+
+        # 2. Nonaktifkan standby, hibernate, dan monitor timeout via powercfg
+        Start-Process -FilePath "powercfg" -ArgumentList "/change standby-timeout-ac 0" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+        Start-Process -FilePath "powercfg" -ArgumentList "/change hibernate-timeout-ac 0" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+        Start-Process -FilePath "powercfg" -ArgumentList "/change monitor-timeout-ac 0" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+
+        $global:LabKeepAliveActive = $true
+        if (Get-Command Write-LogSuccess -ErrorAction SilentlyContinue) {
+            Write-LogSuccess "Lab Keep-Alive Guard AKTIF: Komputer Lab dilindungi dari shutdown/sleep otomatis akibat idle 10 menit!"
+        }
+    } catch {
+        if (Get-Command Write-LogWarning -ErrorAction SilentlyContinue) {
+            Write-LogWarning "Gagal menginisialisasi penuh Lab Keep-Alive Guard: $_"
+        }
+    }
+}
+
+function Stop-LabKeepAliveGuard {
+    if (-not $global:LabKeepAliveActive) {
+        return
+    }
+
+    try {
+        if (([System.Management.Automation.PSTypeName]'LabKeepAliveAPI').Type) {
+            [LabKeepAliveAPI]::StopHeartbeat()
+        }
+        $global:LabKeepAliveActive = $false
+        if (Get-Command Write-LogInfo -ErrorAction SilentlyContinue) {
+            Write-LogInfo "Lab Keep-Alive Guard dinonaktifkan."
+        }
+    } catch {}
+}
+

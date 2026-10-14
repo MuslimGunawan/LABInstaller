@@ -909,6 +909,39 @@ function Ensure-DesktopShortcuts {
                     "C:\Program Files (x86)\Git\git-bash.exe"
                 )
                 Description     = "Git Bash"
+            },
+            @{
+                Name            = "Microsoft Word"
+                LnkName         = "Word.lnk"
+                Patterns        = @(
+                    "C:\Program Files\Microsoft Office\root\Office*\WINWORD.EXE",
+                    "C:\Program Files (x86)\Microsoft Office\root\Office*\WINWORD.EXE",
+                    "C:\Program Files\Microsoft Office\Office*\WINWORD.EXE",
+                    "C:\Program Files (x86)\Microsoft Office\Office*\WINWORD.EXE"
+                )
+                Description     = "Microsoft Word"
+            },
+            @{
+                Name            = "Microsoft Excel"
+                LnkName         = "Excel.lnk"
+                Patterns        = @(
+                    "C:\Program Files\Microsoft Office\root\Office*\EXCEL.EXE",
+                    "C:\Program Files (x86)\Microsoft Office\root\Office*\EXCEL.EXE",
+                    "C:\Program Files\Microsoft Office\Office*\EXCEL.EXE",
+                    "C:\Program Files (x86)\Microsoft Office\Office*\EXCEL.EXE"
+                )
+                Description     = "Microsoft Excel"
+            },
+            @{
+                Name            = "Microsoft PowerPoint"
+                LnkName         = "PowerPoint.lnk"
+                Patterns        = @(
+                    "C:\Program Files\Microsoft Office\root\Office*\POWERPNT.EXE",
+                    "C:\Program Files (x86)\Microsoft Office\root\Office*\POWERPNT.EXE",
+                    "C:\Program Files\Microsoft Office\Office*\POWERPNT.EXE",
+                    "C:\Program Files (x86)\Microsoft Office\Office*\POWERPNT.EXE"
+                )
+                Description     = "Microsoft PowerPoint"
             }
         )
 
@@ -1532,6 +1565,21 @@ function Invoke-WindowsAndOfficeActivation {
             } catch {}
         }
     }
+
+    # Kembalikan warna konsol secara merata (membersihkan artefak warna cmd.exe / cls)
+    try {
+        if ($global:LabOriginalBgColor) {
+            $Host.UI.RawUI.BackgroundColor = $global:LabOriginalBgColor
+        }
+        if ($global:LabOriginalFgColor) {
+            $Host.UI.RawUI.ForegroundColor = $global:LabOriginalFgColor
+        }
+        Clear-Host
+        if (Get-Command "Show-LabBanner" -ErrorAction SilentlyContinue) {
+            $ver = if (Get-Command "Get-LocalVersionInfo" -ErrorAction SilentlyContinue) { (Get-LocalVersionInfo).version } else { "1.0.30" }
+            Show-LabBanner -Version $ver
+        }
+    } catch {}
 
     Write-LogSuccess "Proses aktivasi sistem Windows & Office selesai diterapkan!"
     return $true

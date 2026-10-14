@@ -36,6 +36,12 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+# Simpan warna asli konsol untuk pemulihan seragam setelah eksekusi alat eksternal (cmd.exe)
+try {
+    $global:LabOriginalBgColor = $Host.UI.RawUI.BackgroundColor
+    $global:LabOriginalFgColor = $Host.UI.RawUI.ForegroundColor
+} catch {}
+
 # Nonaktifkan QuickEdit Mode agar klik mouse pada konsol tidak membekukan (pause) script
 try {
     $codeQE = @"
@@ -86,6 +92,15 @@ if ([string]::IsNullOrWhiteSpace($ScriptRoot)) {
 # Inisialisasi Logger
 Initialize-Logger -LogDir (Join-Path -Path $ScriptRoot -ChildPath "logs")
 
+# Aktifkan Lab Keep-Alive Guard (Anti-Sleep & Anti-Idle Shutdown 10 menit)
+Start-LabKeepAliveGuard
+
+# Pastikan Keep-Alive Guard dilepas bersih saat sesi PowerShell ditutup
+try {
+    Register-EngineEvent -SourceIdentifier ([System.Management.Automation.PsEngineEvent]::Exiting) -Action { Stop-LabKeepAliveGuard } -SupportEvent | Out-Null
+} catch {}
+
+
 # ------------------------------------------------------------------------------
 # 4. Baca Konfigurasi & Versi
 # ------------------------------------------------------------------------------
@@ -119,6 +134,7 @@ if ($config -and $config.system.checkUpdateOnStartup) {
             $applied = Invoke-SystemUpdate -UpdateInfo $startupUpdate -ScriptRootDirectory $ScriptRoot
             if ($applied) {
                 Write-Host "Memulai ulang LABInstaller dengan versi baru..." -ForegroundColor Green
+                Stop-LabKeepAliveGuard
                 Start-Sleep -Seconds 2
                 Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
                 exit
@@ -166,6 +182,7 @@ while ($true) {
         "4" {
             $needRestart = Show-UpdateMenuDialog -ScriptRootDirectory $ScriptRoot -Config $config
             if ($needRestart) {
+                Stop-LabKeepAliveGuard
                 Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
                 exit
             }
@@ -185,12 +202,13 @@ while ($true) {
             }
         }
         "0" {
+            Stop-LabKeepAliveGuard
             Write-LogInfo "Keluar dari LABInstaller. Terima kasih!"
             Start-Sleep -Seconds 1
             exit
         }
         Default {
-            Write-LogWarning "Pilihan '$pilihan' tidak valid. Silakan pilih 0 - 5."
+            Write-LogWarning "Pilihan '$pilihan' tidak valid. Silakan pilih 0 - 6."
             Start-Sleep -Seconds 1
         }
     }

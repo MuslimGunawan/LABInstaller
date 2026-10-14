@@ -1113,4 +1113,69 @@ function Setup-VSCodePostInstall {
     }
 }
 
+function Setup-OfficePostInstall {
+    Write-LogStep "Mengonfigurasi dan Memverifikasi Instalasi Microsoft 365 (Office C2R)..."
+
+    # 1. Tunggu hingga proses instalasi Click-to-Run (OfficeClickToRun / OfficeSetup) selesai jika masih berjalan
+    $maxWaitSec = 900
+    $waited = 0
+    while ($waited -lt $maxWaitSec) {
+        $wordCandidates = @(
+            "C:\Program Files\Microsoft Office\root\Office*\WINWORD.EXE",
+            "C:\Program Files (x86)\Microsoft Office\root\Office*\WINWORD.EXE",
+            "C:\Program Files\Microsoft Office\Office*\WINWORD.EXE",
+            "C:\Program Files (x86)\Microsoft Office\Office*\WINWORD.EXE"
+        )
+        $wordFound = $false
+        foreach ($wc in $wordCandidates) {
+            if (Resolve-Path -Path $wc -ErrorAction SilentlyContinue) {
+                $wordFound = $true
+                break
+            }
+        }
+
+        $c2rProcesses = Get-Process -Name "OfficeClickToRun", "OfficeSetup" -ErrorAction SilentlyContinue
+
+        if ($wordFound -and (-not $c2rProcesses)) {
+            Write-LogSuccess "Instalasi Microsoft Office Click-to-Run telah selesai terpasang sepenuhnya."
+            break
+        }
+
+        if ($c2rProcesses) {
+            if ($wordFound) {
+                Write-LogInfo "Microsoft Office sudah terpasang, sedang memfinalisasi komponen di latar belakang... (${waited}s)"
+                Start-Sleep -Seconds 5
+                $waited += 5
+                # Periksa apakah OfficeSetup sudah keluar
+                $setupActive = Get-Process -Name "OfficeSetup" -ErrorAction SilentlyContinue
+                if (-not $setupActive) {
+                    break
+                }
+            } else {
+                Write-LogInfo "Instalasi Microsoft Office sedang mengunduh & memasang komponen... (${waited}s)"
+                Start-Sleep -Seconds 10
+                $waited += 10
+            }
+        } else {
+            # Tidak ada proses C2R aktif
+            break
+        }
+    }
+
+    # 2. Sinkronisasi Ikon Desktop Resmi (Word, Excel, PowerPoint)
+    if (Get-Command Ensure-DesktopShortcuts -ErrorAction SilentlyContinue) {
+        Ensure-DesktopShortcuts
+    }
+
+    # 3. Jalankan Aktivasi Permanen Otomatis via Ohook
+    Write-LogStep "Menjalankan Aktivasi Otomatis Microsoft Office (Ohook Permanen)..."
+    if (Get-Command Invoke-WindowsAndOfficeActivation -ErrorAction SilentlyContinue) {
+        Invoke-WindowsAndOfficeActivation -Force
+    }
+
+    Write-LogSuccess "Konfigurasi dan Aktivasi Microsoft 365 (Office) selesai!"
+    return $true
+}
+
+
 
