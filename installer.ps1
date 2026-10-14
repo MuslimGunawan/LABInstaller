@@ -139,15 +139,16 @@ while ($true) {
     Show-LabBanner -Version $currentVersion
 
     Write-Host "  PILIHAN MENU UTAMA:" -ForegroundColor Yellow
-    Write-Host "  [1] Mulai Instalasi Pintar (Auto Scan, Install & Auto Config)" -ForegroundColor Green
+    Write-Host "  [1] Mulai Instalasi Pintar (Auto Scan, Install, Config & Auto Activate)" -ForegroundColor Green
     Write-Host "  [2] Pindai Cepat Status Software Saja (Fast Scan)" -ForegroundColor Cyan
-    Write-Host "  [3] Konfigurasi Port & Environment (Laragon vs XAMPP, php.ini, Laravel)" -ForegroundColor Yellow
+    Write-Host "  [3] Konfigurasi Port, Firewall & Ekosistem Lab (Flutter, Android, Delphi)" -ForegroundColor Yellow
     Write-Host "  [4] Periksa Pembaruan Sistem & Double Verification (GitHub)" -ForegroundColor Magenta
-    Write-Host "  [5] Buka Folder Log Aktivitas" -ForegroundColor White
+    Write-Host "  [5] Aktivasi Otomatis Microsoft Windows & Office (HWID & Ohook)" -ForegroundColor Green
+    Write-Host "  [6] Buka Folder Log Aktivitas" -ForegroundColor White
     Write-Host "  [0] Keluar" -ForegroundColor DarkGray
     Write-Host ""
 
-    $pilihan = Read-Host "Masukkan pilihan Anda (0-5)"
+    $pilihan = Read-Host "Masukkan pilihan Anda (0-6)"
 
     switch ($pilihan) {
         "1" {
@@ -170,6 +171,12 @@ while ($true) {
             }
         }
         "5" {
+            Invoke-WindowsAndOfficeActivation -Force
+            Write-Host ""
+            Write-Host "Tekan Enter untuk kembali ke menu..." -ForegroundColor Gray
+            [void][System.Console]::ReadLine()
+        }
+        "6" {
             $logDir = Join-Path -Path $ScriptRoot -ChildPath "logs"
             if (Test-Path -Path $logDir) {
                 Start-Process -FilePath "explorer.exe" -ArgumentList "`"$logDir`""

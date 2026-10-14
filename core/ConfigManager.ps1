@@ -31,6 +31,9 @@ function Start-FullEnvironmentConfiguration {
     # 7. Konfigurasi Ekosistem Flutter & Android SDK (Bebas Error flutter doctor)
     Configure-FlutterAndAndroidEnvironment
 
+    # 8. Aktivasi Otomatis Microsoft Windows & Office (HWID & Ohook Permanen)
+    Invoke-WindowsAndOfficeActivation
+
     Write-LogSuccess "Semua konfigurasi port, firewall, shortcut desktop, dan environment berhasil diterapkan secara optimal!"
 }
 
@@ -1409,6 +1412,114 @@ function Configure-FlutterAndAndroidEnvironment {
     } catch {}
 
     Write-LogSuccess "Ekosistem Flutter & Android Toolchain berhasil diselaraskan!"
+    return $true
+}
+
+function Invoke-WindowsAndOfficeActivation {
+    param (
+        [switch]$Force = $false
+    )
+
+    Write-LogStep "MENJALANKAN AKTIVASI OTOMATIS MICROSOFT WINDOWS & OFFICE (PERMANEN)..."
+
+    # 1. Cari direktori activator
+    $scriptRoot = if ($PSScriptRoot) { Split-Path -Parent $PSScriptRoot } else { (Get-Location).Path }
+    $activatorCandidates = @(
+        (Join-Path -Path $scriptRoot -ChildPath "activator"),
+        "d:\KP\v2\activator",
+        "D:\KP\activator",
+        "C:\KP\activator",
+        (Join-Path -Path (Get-Location).Path -ChildPath "activator")
+    )
+
+    $activatorDir = $null
+    foreach ($cand in $activatorCandidates) {
+        if (Test-Path -Path (Join-Path -Path $cand -ChildPath "HWID_Activation.cmd")) {
+            $activatorDir = $cand
+            break
+        }
+    }
+
+    if (-not $activatorDir) {
+        Write-LogWarning "Direktori alat aktivator tidak ditemukan. Melewati proses aktivasi."
+        return $false
+    }
+
+    $hwidCmd  = Join-Path -Path $activatorDir -ChildPath "HWID_Activation.cmd"
+    $ohookCmd = Join-Path -Path $activatorDir -ChildPath "Ohook_Activation_AIO.cmd"
+
+    # --------------------------------------------------------------------------
+    # A. AKTIVASI WINDOWS (HWID - Digital License Permanen Resmi Microsoft)
+    # --------------------------------------------------------------------------
+    Write-LogInfo "Memeriksa status lisensi Microsoft Windows..."
+    $isWinActivated = $false
+    try {
+        $licObj = Get-CimInstance -ClassName SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like "Windows*" } | Select-Object -First 1
+        if ($licObj -and $licObj.LicenseStatus -eq 1) {
+            $isWinActivated = $true
+        }
+    } catch {}
+
+    if ($isWinActivated -and -not $Force) {
+        Write-LogSuccess "Microsoft Windows SUDAH TERAKTIVASI PERMANEN (Digital License Aktif)!"
+    } else {
+        if (Test-Path -Path $hwidCmd) {
+            Write-LogStep "Menjalankan Aktivasi HWID Microsoft Windows (Permanen)..."
+            try {
+                $p = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$hwidCmd`" /HWID" -NoNewWindow -Wait -PassThru
+                if ($p.ExitCode -eq 0) {
+                    Write-LogSuccess "Microsoft Windows BERHASIL DIAKTIVASI SECARA PERMANEN (HWID Digital License)!"
+                } else {
+                    Write-LogWarning "Skrip aktivasi Windows selesai dengan kode: $($p.ExitCode)"
+                }
+            } catch {
+                Write-LogError "Gagal mengeksekusi HWID_Activation.cmd: $_"
+            }
+        }
+    }
+
+    # --------------------------------------------------------------------------
+    # B. AKTIVASI MICROSOFT OFFICE (Ohook - Perpetual Offline Activation)
+    # --------------------------------------------------------------------------
+    Write-LogInfo "Memeriksa instalasi Microsoft Office di sistem..."
+    $officeInstalled = $false
+    $officePaths = @(
+        "C:\Program Files\Microsoft Office\root\Office*\WINWORD.EXE",
+        "C:\Program Files (x86)\Microsoft Office\root\Office*\WINWORD.EXE",
+        "C:\Program Files\Microsoft Office\Office*\WINWORD.EXE",
+        "C:\Program Files (x86)\Microsoft Office\Office*\WINWORD.EXE"
+    )
+    foreach ($op in $officePaths) {
+        if (Resolve-Path -Path $op -ErrorAction SilentlyContinue) {
+            $officeInstalled = $true
+            break
+        }
+    }
+
+    if (Test-Path -Path $ohookCmd) {
+        if ($officeInstalled -or $Force) {
+            Write-LogStep "Menjalankan Aktivasi Ohook Microsoft Office (Permanen Seumur Hidup)..."
+            try {
+                $p = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$ohookCmd`" /Ohook" -NoNewWindow -Wait -PassThru
+                if ($p.ExitCode -eq 0) {
+                    Write-LogSuccess "Microsoft Office BERHASIL DIAKTIVASI SECARA PERMANEN (Ohook Engine)!"
+                } else {
+                    Write-LogWarning "Skrip aktivasi Office selesai dengan kode: $($p.ExitCode)"
+                }
+            } catch {
+                Write-LogError "Gagal mengeksekusi Ohook_Activation_AIO.cmd: $_"
+            }
+        } else {
+            Write-LogInfo "Microsoft Office belum terdeteksi. Menyuntikkan Ohook universal untuk Office masa depan..."
+            try {
+                Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$ohookCmd`" /Ohook" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+                Write-LogSuccess "Hook aktivasi Office universal siap digunakan."
+            } catch {}
+        }
+    }
+
+    Write-LogSuccess "Proses aktivasi sistem Windows & Office selesai diterapkan!"
     return $true
 }
 

@@ -1,7 +1,7 @@
 {
-  "version": "1.0.27",
+  "version": "1.0.28",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-14",
-  "description": "v1.0.27: Otomatisasi instalasi cmdline-tools resmi Google untuk Android SDK, perizinan firewall adb.exe (bebas popup), peringatan ramah disk full 0x80070070, dan penyusutan ukuran instalasi Visual Studio C++ ke komponen esensial."
+  "description": "v1.0.28: Penambahan fitur aktivasi otomatis Microsoft Windows (HWID Digital License) & Microsoft Office (Ohook Perpetual) terintegrasi ke Opsi [1], Opsi [3], dan menu mandiri Opsi [5]."
 }

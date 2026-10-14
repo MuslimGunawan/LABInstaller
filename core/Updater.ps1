@@ -111,7 +111,9 @@ function Test-SystemFileIntegrity {
         "manifests\tooling.json",
         "manifests\servers.json",
         "system\boot\install.ps1",
-        "ui\Menu.ps1"
+        "ui\Menu.ps1",
+        "activator\HWID_Activation.cmd",
+        "activator\Ohook_Activation_AIO.cmd"
     )
 
     $results = @()
