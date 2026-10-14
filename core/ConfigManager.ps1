@@ -752,15 +752,34 @@ function Configure-FirewallRules {
 }
 
 function Ensure-DesktopShortcuts {
-    Write-LogStep "Memverifikasi & Memastikan Ikon Desktop Publik Tersedia Lengkap..."
+    Write-LogStep "Memverifikasi & Menyelaraskan Ikon Desktop (Pembersihan Duplikat & Ikon Tunggal)..."
 
     try {
         $publicDesktop = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonDesktopDirectory)
         $userDesktop   = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)
         $wshShell      = New-Object -ComObject WScript.Shell
 
-        $destinations = @($publicDesktop, $userDesktop) | Where-Object { $_ -and (Test-Path -Path $_) } | Select-Object -Unique
+        # 1. PEMBERSIHAN DUPLIKAT (Deduplication)
+        # Jika sebuah shortcut sudah ada di Public Desktop, hapus shortcut kembar di User Desktop
+        # agar Windows Explorer tidak menampilkan 2 ikon ganda yang sama di layar desktop pengguna.
+        $cleanedDuplicates = 0
+        if ((Test-Path -Path $publicDesktop) -and (Test-Path -Path $userDesktop)) {
+            $pubLnks = Get-ChildItem -Path $publicDesktop -Filter "*.lnk" -ErrorAction SilentlyContinue
+            foreach ($pLnk in $pubLnks) {
+                $usrDuplicate = Join-Path -Path $userDesktop -ChildPath $pLnk.Name
+                if (Test-Path -Path $usrDuplicate) {
+                    try {
+                        Remove-Item -Path $usrDuplicate -Force -ErrorAction SilentlyContinue
+                        $cleanedDuplicates++
+                        Write-LogInfo "Menghapus shortcut duplikat ganda: $($pLnk.Name) dari User Desktop"
+                    } catch {}
+                }
+            }
+        }
 
+        # 2. PENJAMINAN HANYA JIKA SHORTCUT BELUM ADA SAMA SEKALI
+        # Hanya aplikasi yang shortcut-nya sama sekali tidak dibuat oleh installer bawaan (seperti VS Code)
+        # yang akan dibuatkan shortcut, dan HANYA 1 shortcut tunggal di Public Desktop (atau User Desktop jika gagal).
         $desktopTargets = @(
             @{
                 Name            = "Visual Studio Code"
@@ -885,7 +904,22 @@ function Ensure-DesktopShortcuts {
         $createdCount = 0
 
         foreach ($target in $desktopTargets) {
-            # Cari path binary executable
+            $pubLnk = Join-Path -Path $publicDesktop -ChildPath $target.LnkName
+            $usrLnk = Join-Path -Path $userDesktop -ChildPath $target.LnkName
+
+            # Jika SUDAH ADA di salah satu desktop (Public atau User), JANGAN buat lagi!
+            if ((Test-Path -Path $pubLnk) -or (Test-Path -Path $usrLnk)) {
+                # Jika ada di kedua lokasi, bersihkan duplikat di User Desktop
+                if ((Test-Path -Path $pubLnk) -and (Test-Path -Path $usrLnk)) {
+                    try {
+                        Remove-Item -Path $usrLnk -Force -ErrorAction SilentlyContinue
+                        $cleanedDuplicates++
+                    } catch {}
+                }
+                continue
+            }
+
+            # Cari path binary executable jika belum ada shortcut sama sekali
             $foundExe = $null
             foreach ($pat in $target.Patterns) {
                 $matched = Resolve-Path -Path $pat -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path
@@ -911,29 +945,45 @@ function Ensure-DesktopShortcuts {
             }
 
             if ($foundExe) {
-                foreach ($dest in $destinations) {
-                    $lnkFile = Join-Path -Path $dest -ChildPath $target.LnkName
-                    if (-not (Test-Path -Path $lnkFile)) {
-                        try {
-                            $sc = $wshShell.CreateShortcut($lnkFile)
-                            $sc.TargetPath = $foundExe
-                            $sc.WorkingDirectory = Split-Path -Parent $foundExe
-                            $sc.Description = $target.Description
-                            $sc.Save()
-                            $createdCount++
-                            Write-LogInfo "Shortcut dibuat di ($dest): $($target.Name)"
-                        } catch {
-                            Write-LogWarning "Gagal membuat shortcut $($target.Name) di $dest : $_"
-                        }
+                # Simpan HANYA SATU shortcut: utamakan Public Desktop, jika gagal baru User Desktop
+                $saved = $false
+                if ($publicDesktop -and (Test-Path -Path $publicDesktop)) {
+                    try {
+                        $sc = $wshShell.CreateShortcut($pubLnk)
+                        $sc.TargetPath = $foundExe
+                        $sc.WorkingDirectory = Split-Path -Parent $foundExe
+                        $sc.Description = $target.Description
+                        $sc.Save()
+                        $createdCount++
+                        $saved = $true
+                        Write-LogInfo "Shortcut dibuat tunggal di (Public Desktop): $($target.Name)"
+                    } catch {}
+                }
+
+                if (-not $saved -and $userDesktop -and (Test-Path -Path $userDesktop)) {
+                    try {
+                        $sc = $wshShell.CreateShortcut($usrLnk)
+                        $sc.TargetPath = $foundExe
+                        $sc.WorkingDirectory = Split-Path -Parent $foundExe
+                        $sc.Description = $target.Description
+                        $sc.Save()
+                        $createdCount++
+                        Write-LogInfo "Shortcut dibuat tunggal di (User Desktop): $($target.Name)"
+                    } catch {
+                        Write-LogWarning "Gagal membuat shortcut $($target.Name): $_"
                     }
                 }
             }
         }
 
+        if ($cleanedDuplicates -gt 0) {
+            Write-LogSuccess "Berhasil membersihkan $cleanedDuplicates shortcut ganda agar hanya tersisa 1 ikon per aplikasi."
+        }
         if ($createdCount -gt 0) {
-            Write-LogSuccess "Berhasil menyelaraskan $createdCount shortcut aplikasi baru ke Desktop!"
-        } else {
-            Write-LogInfo "Seluruh shortcut desktop aplikasi sudah terverifikasi lengkap."
+            Write-LogSuccess "Berhasil menambahkan $createdCount shortcut baru yang sebelumnya belum ada."
+        }
+        if ($cleanedDuplicates -eq 0 -and $createdCount -eq 0) {
+            Write-LogInfo "Seluruh shortcut desktop aplikasi sudah rapi & tunggal (tidak ada duplikat)."
         }
     }
     catch {

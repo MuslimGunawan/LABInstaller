@@ -724,22 +724,25 @@ function Setup-Delphi7VisionLabHandler {
         if ($installedExe) {
             Write-LogSuccess "Borland Delphi 7 Enterprise & VisionLab VCL BERHASIL DIPASANG!"
             
-            # Buat shortcut di Desktop Publik & User
+            # Buat shortcut tunggal di Desktop (Utamakan Public Desktop, bersihkan duplikat)
             try {
                 $publicDesktop = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonDesktopDirectory)
                 $userDesktop   = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)
-                $wsh = New-Object -ComObject WScript.Shell
-                $scDirs = @($publicDesktop, $userDesktop) | Where-Object { $_ -and (Test-Path -Path $_) } | Select-Object -Unique
+                $pubLnk = Join-Path -Path $publicDesktop -ChildPath "Delphi 7.lnk"
+                $usrLnk = Join-Path -Path $userDesktop -ChildPath "Delphi 7.lnk"
 
-                foreach ($scDir in $scDirs) {
-                    $scPath = Join-Path -Path $scDir -ChildPath "Delphi 7.lnk"
-                    $sc = $wsh.CreateShortcut($scPath)
+                if ((-not (Test-Path -Path $pubLnk)) -and (-not (Test-Path -Path $usrLnk))) {
+                    $wsh = New-Object -ComObject WScript.Shell
+                    $targetLnk = if ($publicDesktop -and (Test-Path -Path $publicDesktop)) { $pubLnk } else { $usrLnk }
+                    $sc = $wsh.CreateShortcut($targetLnk)
                     $sc.TargetPath = $installedExe
                     $sc.WorkingDirectory = Split-Path -Parent $installedExe
                     $sc.Description = "Borland Delphi 7 Enterprise Edition"
                     $sc.Save()
+                    Write-LogSuccess "Shortcut 'Delphi 7' dibuat tunggal di Desktop."
+                } elseif ((Test-Path -Path $pubLnk) -and (Test-Path -Path $usrLnk)) {
+                    Remove-Item -Path $usrLnk -Force -ErrorAction SilentlyContinue
                 }
-                Write-LogSuccess "Shortcut 'Delphi 7' diselaraskan ke Desktop."
             } catch {}
 
             return $true
@@ -759,13 +762,25 @@ function Setup-Delphi7VisionLabHandler {
 }
 
 function Setup-VSCodePostInstall {
-    Write-LogStep "Mengonfigurasi Shortcut Desktop & Integrasi Visual Studio Code..."
+    Write-LogStep "Mengonfigurasi Shortcut Desktop Visual Studio Code..."
     if (Get-Command Refresh-CurrentSessionEnvironment -ErrorAction SilentlyContinue) {
         Refresh-CurrentSessionEnvironment
     }
 
     $publicDesktop = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonDesktopDirectory)
     $userDesktop   = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)
+
+    $pubLnk = Join-Path -Path $publicDesktop -ChildPath "Visual Studio Code.lnk"
+    $usrLnk = Join-Path -Path $userDesktop -ChildPath "Visual Studio Code.lnk"
+
+    # Jika sudah ada di salah satu lokasi, bersihkan duplikat jika ada dan selesai
+    if ((Test-Path -Path $pubLnk) -or (Test-Path -Path $usrLnk)) {
+        if ((Test-Path -Path $pubLnk) -and (Test-Path -Path $usrLnk)) {
+            Remove-Item -Path $usrLnk -Force -ErrorAction SilentlyContinue
+        }
+        Write-LogInfo "Shortcut Visual Studio Code sudah ada di Desktop (tunggal)."
+        return
+    }
 
     $exeCandidates = @(
         "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe",
@@ -796,20 +811,29 @@ function Setup-VSCodePostInstall {
 
     if ($codeExe) {
         $wsh = New-Object -ComObject WScript.Shell
-        $destinations = @($publicDesktop, $userDesktop) | Where-Object { $_ -and (Test-Path -Path $_) } | Select-Object -Unique
-        foreach ($dest in $destinations) {
+        # Buat HANYA SATU shortcut: utamakan Public Desktop, fallback ke User Desktop
+        $saved = $false
+        if ($publicDesktop -and (Test-Path -Path $publicDesktop)) {
             try {
-                $lnkFile = Join-Path -Path $dest -ChildPath "Visual Studio Code.lnk"
-                if (-not (Test-Path -Path $lnkFile)) {
-                    $sc = $wsh.CreateShortcut($lnkFile)
-                    $sc.TargetPath = $codeExe
-                    $sc.WorkingDirectory = Split-Path -Parent $codeExe
-                    $sc.Description = "Visual Studio Code"
-                    $sc.Save()
-                    Write-LogSuccess "Shortcut Desktop Visual Studio Code berhasil diselaraskan ke: $dest"
-                }
+                $sc = $wsh.CreateShortcut($pubLnk)
+                $sc.TargetPath = $codeExe
+                $sc.WorkingDirectory = Split-Path -Parent $codeExe
+                $sc.Description = "Visual Studio Code"
+                $sc.Save()
+                $saved = $true
+                Write-LogSuccess "Shortcut Desktop Visual Studio Code dibuat tunggal di: $pubLnk"
+            } catch {}
+        }
+        if (-not $saved -and $userDesktop -and (Test-Path -Path $userDesktop)) {
+            try {
+                $sc = $wsh.CreateShortcut($usrLnk)
+                $sc.TargetPath = $codeExe
+                $sc.WorkingDirectory = Split-Path -Parent $codeExe
+                $sc.Description = "Visual Studio Code"
+                $sc.Save()
+                Write-LogSuccess "Shortcut Desktop Visual Studio Code dibuat tunggal di: $usrLnk"
             } catch {
-                Write-LogWarning "Gagal membuat shortcut desktop VS Code di $dest : $_"
+                Write-LogWarning "Gagal membuat shortcut desktop VS Code: $_"
             }
         }
     } else {
