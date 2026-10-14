@@ -676,12 +676,41 @@ function Setup-Delphi7VisionLabHandler {
         Expand-Archive -Path $bundleZip -DestinationPath $tempExtract -Force
     }
 
-    # 3. Jalankan script Install_Delphi7_and_VisionLab.bat
+    # 3. Patch otomatis MSI database agar tidak memicu popup dialog error Serial/Auth Key
+    $msiFile = Join-Path -Path $tempExtract -ChildPath "Delphi7\Borland Delphi 7.msi"
+    if (Test-Path -Path $msiFile) {
+        try {
+            $wi = New-Object -ComObject WindowsInstaller.Installer
+            $db = $wi.OpenDatabase($msiFile, 1) # 1 = msiOpenDatabaseModeTransact
+            $v1 = $db.OpenView("UPDATE InstallExecuteSequence SET Condition = '0' WHERE Action = 'BorValidatePassword'")
+            $v1.Execute()
+            $v1.Close()
+            $v2 = $db.OpenView("UPDATE Property SET Value = 'ENT' WHERE Property = 'SKU'")
+            $v2.Execute()
+            $v2.Close()
+            $v3 = $db.OpenView("UPDATE Property SET Value = '0' WHERE Property = 'BadPassword'")
+            $v3.Execute()
+            $v3.Close()
+            $db.Commit()
+            Write-LogSuccess "Konfigurasi otomatis MSI Delphi 7 (Bypass dialog serial key) berhasil diterapkan."
+        } catch {
+            Write-LogWarning "Pemberitahuan konfigurasi MSI Delphi 7: $_"
+        }
+    }
+
+    # 4. Perbarui script bat jika diperlukan agar tidak memicu argumen serial invalid
     $installBat = Join-Path -Path $tempExtract -ChildPath "Install_Delphi7_and_VisionLab.bat"
     if (-not (Test-Path -Path $installBat)) {
         Write-LogError "Script Install_Delphi7_and_VisionLab.bat tidak ditemukan di dalam paket ZIP."
         return $false
     }
+
+    try {
+        $batContent = [System.IO.File]::ReadAllText($installBat, [System.Text.Encoding]::ASCII)
+        $batContent = $batContent -replace 'PRODUCT_ID="[^"]*"', 'SKU=ENT'
+        $batContent = $batContent -replace 'AUTH_KEY="[^"]*"', ''
+        [System.IO.File]::WriteAllText($installBat, $batContent, [System.Text.Encoding]::ASCII)
+    } catch {}
 
     Write-LogInfo "Menjalankan instalasi Delphi 7, aktivasi dent.slip, kompatibilitas WinXP SP3, & VisionLab VCL..."
     try {
