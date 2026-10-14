@@ -44,6 +44,7 @@
     "directArgs": "/VERYSILENT /NORESTART /MERGETASKS=\"!runcode,desktopicon,addcontextmenufiles,addcontextmenufolders,associatewithfiles,addtopath\"",
     "installType": "exe",
     "fileName": "VSCodeSetup-x64.exe",
+    "postInstallHandler": "Setup-VSCodePostInstall",
     "description": "Editor kode resmi dari Microsoft dengan dukungan ekstensi lengkap."
   },
   {
@@ -199,7 +200,12 @@
     "registryPattern": "(Borland Delphi 7|Delphi 7)",
     "pathCheck": "C:\\Program Files*\\Borland\\Delphi7\\Bin\\delphi32.exe",
     "fileName": "Delphi7_VisionLab_Bundle.zip",
-    "gdriveMirrors": [],
+    "gdriveMirrors": [
+      "1wpGnPF1BvZBzoHk5FFgrXUaAvjpMWFP2",
+      "15aaM2kfyQVEGF5OcGUtSMxxb6-MDD6Xz",
+      "1V80cU-mLJCVFz3ysROwy6PmIEtatkzQb",
+      "1hbmmLvQKyANGpqSS1VaPtMuoZYVl8Vgu"
+    ],
     "description": "IDE klasik Borland Delphi 7 Enterprise lengkap dengan aktivasi dent.slip dan komponen VisionLab VCL 4.5 untuk praktikum pengolahan citra."
   }
 ]

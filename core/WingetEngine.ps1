@@ -211,7 +211,7 @@ function Invoke-PackageInstall {
     if ($Package.type -eq "custom") {
         $handler = $Package.customHandler
         if ($handler -and (Get-Command $handler -ErrorAction SilentlyContinue)) {
-            $ok = & $handler
+            $ok = & $handler -Package $Package
             return $ok
         } else {
             Write-LogError "Handler kustom '$handler' tidak ditemukan untuk $pkgName."

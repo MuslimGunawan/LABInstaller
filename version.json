@@ -1,7 +1,7 @@
 {
-  "version": "1.0.15",
+  "version": "1.0.16",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-14",
-  "description": "v1.0.15: Penambahan paket Borland Delphi 7 Enterprise & VisionLab VCL 4.5 ke Menu [1] Instalasi Pintar (Auto-Install, lisensi dent.slip, fix kompatibilitas Windows 11/10 & firewall)"
+  "description": "v1.0.16: Integrasi 4 mirror Google Drive resmi untuk Borland Delphi 7 & VisionLab VCL, penjaminan otomatis shortcut Desktop (VS Code, Delphi 7, XAMPP, NetBeans, dll.) ke Public Desktop & User Desktop"
 }

@@ -8,7 +8,7 @@ function Start-FullEnvironmentConfiguration {
         [switch]$Interactive = $true
     )
 
-    Write-LogStep "MENJALANKAN KONFIGURASI OTOMATIS PORT, FIREWALL, PHP.INI & EKOSISTEM..."
+    Write-LogStep "MENJALANKAN KONFIGURASI OTOMATIS PORT, FIREWALL, SHORTCUT & EKOSISTEM..."
 
     # 1. Konfigurasi Port Laragon vs XAMPP
     Configure-WebServerPorts
@@ -16,13 +16,16 @@ function Start-FullEnvironmentConfiguration {
     # 2. Otomatisasi Izin Firewall (Auto-Allow Apache, Nginx, MySQL, Node, Python, dll)
     Configure-FirewallRules
 
-    # 3. Konfigurasi php.ini untuk PHP 8.5, Laragon, dan XAMPP
+    # 3. Penjaminan Shortcut Desktop Publik (VS Code, Delphi 7, XAMPP, Android Studio, dll)
+    Ensure-DesktopShortcuts
+
+    # 4. Konfigurasi php.ini untuk PHP 8.5, Laragon, dan XAMPP
     Configure-AllPhpExtensions
 
-    # 4. Konfigurasi Ekosistem Laravel
+    # 5. Konfigurasi Ekosistem Laravel
     Configure-LaravelEcosystem
 
-    Write-LogSuccess "Semua konfigurasi port, firewall, dan environment berhasil diterapkan secara optimal!"
+    Write-LogSuccess "Semua konfigurasi port, firewall, shortcut desktop, dan environment berhasil diterapkan secara optimal!"
 }
 
 function Resolve-Port80Conflict {
@@ -747,4 +750,195 @@ function Configure-FirewallRules {
         Write-LogInfo "Tidak ada binary layanan baru yang perlu didaftarkan ke Firewall."
     }
 }
+
+function Ensure-DesktopShortcuts {
+    Write-LogStep "Memverifikasi & Memastikan Ikon Desktop Publik Tersedia Lengkap..."
+
+    try {
+        $publicDesktop = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonDesktopDirectory)
+        $userDesktop   = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)
+        $wshShell      = New-Object -ComObject WScript.Shell
+
+        $destinations = @($publicDesktop, $userDesktop) | Where-Object { $_ -and (Test-Path -Path $_) } | Select-Object -Unique
+
+        $desktopTargets = @(
+            @{
+                Name            = "Visual Studio Code"
+                LnkName         = "Visual Studio Code.lnk"
+                Patterns        = @(
+                    "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe",
+                    "C:\Users\*\AppData\Local\Programs\Microsoft VS Code\Code.exe",
+                    "C:\Program Files\Microsoft VS Code\Code.exe",
+                    "C:\Program Files (x86)\Microsoft VS Code\Code.exe"
+                )
+                FallbackCommand = "code"
+                Description     = "Visual Studio Code"
+            },
+            @{
+                Name            = "Borland Delphi 7"
+                LnkName         = "Delphi 7.lnk"
+                Patterns        = @(
+                    "C:\Program Files (x86)\Borland\Delphi7\Bin\delphi32.exe",
+                    "C:\Program Files\Borland\Delphi7\Bin\delphi32.exe"
+                )
+                Description     = "Borland Delphi 7 Enterprise Edition"
+            },
+            @{
+                Name            = "XAMPP Control Panel"
+                LnkName         = "XAMPP Control Panel.lnk"
+                Patterns        = @(
+                    "C:\xampp\xampp-control.exe",
+                    "D:\xampp\xampp-control.exe"
+                )
+                Description     = "XAMPP Control Panel"
+            },
+            @{
+                Name            = "Laragon"
+                LnkName         = "Laragon.lnk"
+                Patterns        = @(
+                    "C:\laragon\laragon.exe",
+                    "D:\laragon\laragon.exe"
+                )
+                Description     = "Laragon WAMP 6.0.0"
+            },
+            @{
+                Name            = "Android Studio"
+                LnkName         = "Android Studio.lnk"
+                Patterns        = @(
+                    "C:\Program Files\Android\Android Studio\bin\studio64.exe",
+                    "C:\Program Files (x86)\Android\Android Studio\bin\studio64.exe"
+                )
+                Description     = "Android Studio"
+            },
+            @{
+                Name            = "Apache NetBeans"
+                LnkName         = "Apache NetBeans.lnk"
+                Patterns        = @(
+                    "C:\Program Files\*NetBeans*\bin\netbeans64.exe",
+                    "C:\Program Files\NetBeans*\bin\netbeans64.exe"
+                )
+                Description     = "Apache NetBeans IDE"
+            },
+            @{
+                Name            = "Arduino IDE"
+                LnkName         = "Arduino IDE.lnk"
+                Patterns        = @(
+                    "C:\Program Files\Arduino IDE\Arduino IDE.exe",
+                    "$env:LOCALAPPDATA\Programs\Arduino IDE\Arduino IDE.exe",
+                    "C:\Users\*\AppData\Local\Programs\Arduino IDE\Arduino IDE.exe"
+                )
+                Description     = "Arduino IDE"
+            },
+            @{
+                Name            = "Google Chrome"
+                LnkName         = "Google Chrome.lnk"
+                Patterns        = @(
+                    "C:\Program Files\Google\Chrome\Application\chrome.exe",
+                    "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+                )
+                Description     = "Google Chrome"
+            },
+            @{
+                Name            = "Oracle VirtualBox"
+                LnkName         = "Oracle VirtualBox.lnk"
+                Patterns        = @(
+                    "C:\Program Files\Oracle\VirtualBox\VirtualBox.exe"
+                )
+                Description     = "Oracle VM VirtualBox"
+            },
+            @{
+                Name            = "Cisco Packet Tracer"
+                LnkName         = "Cisco Packet Tracer.lnk"
+                Patterns        = @(
+                    "C:\Program Files\Cisco Packet Tracer *\bin\PacketTracer.exe"
+                )
+                Description     = "Cisco Packet Tracer"
+            },
+            @{
+                Name            = "QGIS Desktop"
+                LnkName         = "QGIS Desktop.lnk"
+                Patterns        = @(
+                    "C:\Program Files\QGIS *\bin\qgis-bin.exe",
+                    "C:\Program Files\QGIS *\qgis.bat"
+                )
+                Description     = "QGIS Desktop GIS"
+            },
+            @{
+                Name            = "Visual Studio 2022"
+                LnkName         = "Visual Studio 2022.lnk"
+                Patterns        = @(
+                    "C:\Program Files\Microsoft Visual Studio\2022\*\Common7\IDE\devenv.exe"
+                )
+                Description     = "Microsoft Visual Studio 2022"
+            },
+            @{
+                Name            = "Git Bash"
+                LnkName         = "Git Bash.lnk"
+                Patterns        = @(
+                    "C:\Program Files\Git\git-bash.exe",
+                    "C:\Program Files (x86)\Git\git-bash.exe"
+                )
+                Description     = "Git Bash"
+            }
+        )
+
+        $createdCount = 0
+
+        foreach ($target in $desktopTargets) {
+            # Cari path binary executable
+            $foundExe = $null
+            foreach ($pat in $target.Patterns) {
+                $matched = Resolve-Path -Path $pat -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path
+                if ($matched -and (Test-Path -Path $matched)) {
+                    $foundExe = $matched
+                    break
+                }
+            }
+
+            if (-not $foundExe -and $target.FallbackCommand) {
+                $cmd = Get-Command $target.FallbackCommand -ErrorAction SilentlyContinue
+                if ($cmd -and $cmd.Source) {
+                    if ($cmd.Source -like "*.exe" -and (Test-Path -Path $cmd.Source)) {
+                        $foundExe = $cmd.Source
+                    } elseif ($cmd.Source -like "*.cmd" -or $cmd.Source -like "*.bat") {
+                        $parentDir = Split-Path -Parent (Split-Path -Parent $cmd.Source)
+                        $guessExe = Join-Path -Path $parentDir -ChildPath "$($target.FallbackCommand).exe"
+                        if (Test-Path -Path $guessExe) {
+                            $foundExe = $guessExe
+                        }
+                    }
+                }
+            }
+
+            if ($foundExe) {
+                foreach ($dest in $destinations) {
+                    $lnkFile = Join-Path -Path $dest -ChildPath $target.LnkName
+                    if (-not (Test-Path -Path $lnkFile)) {
+                        try {
+                            $sc = $wshShell.CreateShortcut($lnkFile)
+                            $sc.TargetPath = $foundExe
+                            $sc.WorkingDirectory = Split-Path -Parent $foundExe
+                            $sc.Description = $target.Description
+                            $sc.Save()
+                            $createdCount++
+                            Write-LogInfo "Shortcut dibuat di ($dest): $($target.Name)"
+                        } catch {
+                            Write-LogWarning "Gagal membuat shortcut $($target.Name) di $dest : $_"
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($createdCount -gt 0) {
+            Write-LogSuccess "Berhasil menyelaraskan $createdCount shortcut aplikasi baru ke Desktop!"
+        } else {
+            Write-LogInfo "Seluruh shortcut desktop aplikasi sudah terverifikasi lengkap."
+        }
+    }
+    catch {
+        Write-LogWarning "Pemeriksaan shortcut desktop mengalami kendala: $_"
+    }
+}
+
 

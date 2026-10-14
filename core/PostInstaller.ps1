@@ -626,6 +626,7 @@ function Setup-XamppEnvironment {
 }
 
 function Setup-Delphi7VisionLabHandler {
+    param ($Package)
     Write-LogStep "MEMPROSES INSTALASI OTOMATIS BORLAND DELPHI 7 & VISIONLAB VCL..."
     Refresh-CurrentSessionEnvironment
 
@@ -639,11 +640,18 @@ function Setup-Delphi7VisionLabHandler {
             Write-LogInfo "Menyalin bundle installer dari penyimpanan lokal ($localBundleBackup)..."
             Copy-Item -Path $localBundleBackup -Destination $bundleZip -Force -ErrorAction SilentlyContinue
         } else {
-            # Unduh dari Google Drive Mirror jika mirror IDs terkonfigurasi
-            $delphiPkg = (Load-AllManifestPackages -ManifestDir (Join-Path -Path (Get-Location).Path -ChildPath "manifests")) | Where-Object { $_.id -eq "Borland.Delphi.7" }
-            if ($delphiPkg -and $delphiPkg.gdriveMirrors -and $delphiPkg.gdriveMirrors.Count -gt 0) {
-                Write-LogInfo "Mengunduh Delphi 7 & VisionLab Bundle dari Google Drive..."
-                Invoke-GoogleDriveMultiMirrorDownload -MirrorIds $delphiPkg.gdriveMirrors -DestinationPath $bundleZip -AppName "Borland Delphi 7 + VisionLab" | Out-Null
+            # Dapatkan daftar Google Drive mirror
+            $mirrors = $null
+            if ($Package -and $Package.gdriveMirrors) {
+                $mirrors = $Package.gdriveMirrors
+            } else {
+                $delphiPkg = (Load-AllManifestPackages -ManifestDir (Join-Path -Path (Get-Location).Path -ChildPath "manifests")) | Where-Object { $_.id -eq "Borland.Delphi.7" }
+                if ($delphiPkg) { $mirrors = $delphiPkg.gdriveMirrors }
+            }
+
+            if ($mirrors -and $mirrors.Count -gt 0) {
+                Write-LogInfo "Mengunduh Delphi 7 & VisionLab Bundle dari Google Drive mirror..."
+                Invoke-GoogleDriveMultiMirrorDownload -MirrorIds $mirrors -DestinationPath $bundleZip -AppName "Borland Delphi 7 + VisionLab" | Out-Null
             }
         }
     }
@@ -687,17 +695,22 @@ function Setup-Delphi7VisionLabHandler {
         if ($installedExe) {
             Write-LogSuccess "Borland Delphi 7 Enterprise & VisionLab VCL BERHASIL DIPASANG!"
             
-            # Buat shortcut di Desktop Publik
+            # Buat shortcut di Desktop Publik & User
             try {
                 $publicDesktop = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonDesktopDirectory)
-                $scPath = Join-Path -Path $publicDesktop -ChildPath "Delphi 7.lnk"
+                $userDesktop   = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)
                 $wsh = New-Object -ComObject WScript.Shell
-                $sc = $wsh.CreateShortcut($scPath)
-                $sc.TargetPath = $installedExe
-                $sc.WorkingDirectory = Split-Path -Parent $installedExe
-                $sc.Description = "Borland Delphi 7 Enterprise Edition"
-                $sc.Save()
-                Write-LogSuccess "Shortcut 'Delphi 7' dibuat di Desktop."
+                $scDirs = @($publicDesktop, $userDesktop) | Where-Object { $_ -and (Test-Path -Path $_) } | Select-Object -Unique
+
+                foreach ($scDir in $scDirs) {
+                    $scPath = Join-Path -Path $scDir -ChildPath "Delphi 7.lnk"
+                    $sc = $wsh.CreateShortcut($scPath)
+                    $sc.TargetPath = $installedExe
+                    $sc.WorkingDirectory = Split-Path -Parent $installedExe
+                    $sc.Description = "Borland Delphi 7 Enterprise Edition"
+                    $sc.Save()
+                }
+                Write-LogSuccess "Shortcut 'Delphi 7' diselaraskan ke Desktop."
             } catch {}
 
             return $true
@@ -715,4 +728,64 @@ function Setup-Delphi7VisionLabHandler {
         Remove-Item -Path $tempExtract -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
+
+function Setup-VSCodePostInstall {
+    Write-LogStep "Mengonfigurasi Shortcut Desktop & Integrasi Visual Studio Code..."
+    if (Get-Command Refresh-CurrentSessionEnvironment -ErrorAction SilentlyContinue) {
+        Refresh-CurrentSessionEnvironment
+    }
+
+    $publicDesktop = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonDesktopDirectory)
+    $userDesktop   = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)
+
+    $exeCandidates = @(
+        "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe",
+        "C:\Users\*\AppData\Local\Programs\Microsoft VS Code\Code.exe",
+        "C:\Program Files\Microsoft VS Code\Code.exe",
+        "C:\Program Files (x86)\Microsoft VS Code\Code.exe"
+    )
+
+    $codeExe = $null
+    foreach ($cand in $exeCandidates) {
+        $found = Resolve-Path -Path $cand -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path
+        if ($found -and (Test-Path -Path $found)) {
+            $codeExe = $found
+            break
+        }
+    }
+
+    if (-not $codeExe) {
+        $cmd = Get-Command "code" -ErrorAction SilentlyContinue
+        if ($cmd -and $cmd.Source) {
+            $parentDir = Split-Path -Parent (Split-Path -Parent $cmd.Source)
+            $guess = Join-Path -Path $parentDir -ChildPath "Code.exe"
+            if (Test-Path -Path $guess) {
+                $codeExe = $guess
+            }
+        }
+    }
+
+    if ($codeExe) {
+        $wsh = New-Object -ComObject WScript.Shell
+        $destinations = @($publicDesktop, $userDesktop) | Where-Object { $_ -and (Test-Path -Path $_) } | Select-Object -Unique
+        foreach ($dest in $destinations) {
+            try {
+                $lnkFile = Join-Path -Path $dest -ChildPath "Visual Studio Code.lnk"
+                if (-not (Test-Path -Path $lnkFile)) {
+                    $sc = $wsh.CreateShortcut($lnkFile)
+                    $sc.TargetPath = $codeExe
+                    $sc.WorkingDirectory = Split-Path -Parent $codeExe
+                    $sc.Description = "Visual Studio Code"
+                    $sc.Save()
+                    Write-LogSuccess "Shortcut Desktop Visual Studio Code berhasil diselaraskan ke: $dest"
+                }
+            } catch {
+                Write-LogWarning "Gagal membuat shortcut desktop VS Code di $dest : $_"
+            }
+        }
+    } else {
+        Write-LogWarning "Executable Code.exe belum ditemukan di sistem untuk pembuatan shortcut."
+    }
+}
+
 
