@@ -1,7 +1,7 @@
 {
-  "version": "1.0.24",
+  "version": "1.0.25",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-14",
-  "description": "v1.0.24: Eliminasi popup dialog peringatan OpenWirePkgD7 runtime package pada Delphi 7, memastikan hanya paket desain (*DsnD7.bpl) yang terdaftar di Known Packages serta membersihkan paket runtime (*PkgD7.bpl) secara otomatis."
+  "description": "v1.0.25: Pembaruan daftar mirror Google Drive aktif untuk paket Borland Delphi 7 Enterprise & VisionLab VCL."
 }
