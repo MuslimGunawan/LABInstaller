@@ -1,7 +1,7 @@
 {
-  "version": "1.0.23",
+  "version": "1.0.24",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-14",
-  "description": "v1.0.23: Pembaruan deteksi integritas VisionLab (pathCheck ke VisionLabDsnD7.bpl), sinkronisasi otomatis berkas BPL & LabPacks OpenCV ke Delphi 7, dan pendaftaran lengkap Known Packages ke Component Palette."
+  "description": "v1.0.24: Eliminasi popup dialog peringatan OpenWirePkgD7 runtime package pada Delphi 7, memastikan hanya paket desain (*DsnD7.bpl) yang terdaftar di Known Packages serta membersihkan paket runtime (*PkgD7.bpl) secara otomatis."
 }

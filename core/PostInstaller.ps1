@@ -920,24 +920,17 @@ function Setup-Delphi7VisionLabHandler {
         }
 
         # 11. Registrasi Resmi Paket Komponen VisionLab & VideoLab ke Delphi Component Palette (Known Packages)
+        # HANYA paket desain (*DsnD7.bpl) yang boleh didaftarkan ke Known Packages.
+        # Paket runtime (*PkgD7.bpl) dimuat otomatis via DLL dan dilarang masuk ke Known Packages.
         $knownPackages = @{
-            (Join-Path -Path $dstBpl -ChildPath "OpenWirePkgD7.bpl")             = "OpenWire Package"
             (Join-Path -Path $dstBpl -ChildPath "OpenWireDsnD7.bpl")             = "OpenWire Pin Editors"
-            (Join-Path -Path $dstBpl -ChildPath "SignalLabBasicPkgD7.bpl")       = "SignalLab Basic Package"
             (Join-Path -Path $dstBpl -ChildPath "SignalLabBasicDsnD7.bpl")       = "SignalLab Basic Design Package"
-            (Join-Path -Path $dstBpl -ChildPath "TimingLabBasicPkgD7.bpl")       = "TimingLab Basic Package"
             (Join-Path -Path $dstBpl -ChildPath "TimingLabBasicDsnD7.bpl")       = "TimingLab Basic Design Package"
-            (Join-Path -Path $dstBpl -ChildPath "AudioLabBasicPkgD7.bpl")        = "AudioLab Basic Package"
             (Join-Path -Path $dstBpl -ChildPath "AudioLabBasicDsnD7.bpl")        = "AudioLab Basic Design Package"
-            (Join-Path -Path $dstBpl -ChildPath "MediaLabBasicPkgD7.bpl")        = "MediaLab Basic Package"
             (Join-Path -Path $dstBpl -ChildPath "MediaLabBasicDsnD7.bpl")        = "MediaLab Basic Design Package"
-            (Join-Path -Path $dstBpl -ChildPath "VideoLabBasicPkgD7.bpl")        = "VideoLab Basic Package"
             (Join-Path -Path $dstBpl -ChildPath "VideoLabBasicDsnD7.bpl")        = "VideoLab Basic Design Package"
-            (Join-Path -Path $dstBpl -ChildPath "VideoLabAdditionalPkgD7.bpl")   = "VideoLab Additional Package"
             (Join-Path -Path $dstBpl -ChildPath "VideoLabAdditionalDsnD7.bpl")   = "VideoLab Additional Design Package"
-            (Join-Path -Path $dstBpl -ChildPath "IntelligenceLabBasicPkgD7.bpl") = "IntelligenceLab Basic Package"
             (Join-Path -Path $dstBpl -ChildPath "IntelligenceLabBasicDsnD7.bpl") = "IntelligenceLab Basic Design Package"
-            (Join-Path -Path $dstBpl -ChildPath "VisionLabPkgD7.bpl")            = "VisionLab Package"
             (Join-Path -Path $dstBpl -ChildPath "VisionLabDsnD7.bpl")            = "VisionLab Design Package"
         }
 
@@ -946,9 +939,27 @@ function Setup-Delphi7VisionLabHandler {
             "HKLM:\SOFTWARE\WOW6432Node\Borland\Delphi\7.0\Known Packages",
             "HKLM:\SOFTWARE\Borland\Delphi\7.0\Known Packages"
         )
+        $runtimePackages = @(
+            "OpenWirePkgD7.bpl", "SignalLabBasicPkgD7.bpl", "TimingLabBasicPkgD7.bpl",
+            "AudioLabBasicPkgD7.bpl", "MediaLabBasicPkgD7.bpl", "VideoLabBasicPkgD7.bpl",
+            "VideoLabAdditionalPkgD7.bpl", "IntelligenceLabBasicPkgD7.bpl", "VisionLabPkgD7.bpl"
+        )
         foreach ($kpPath in $kpTargets) {
             try {
                 if (-not (Test-Path -Path $kpPath)) { New-Item -Path $kpPath -Force | Out-Null }
+
+                # Bersihkan entri runtime package (*PkgD7.bpl) agar Delphi tidak memunculkan dialog error
+                $propNames = (Get-Item -Path $kpPath -ErrorAction SilentlyContinue).Property
+                if ($propNames) {
+                    foreach ($pn in $propNames) {
+                        foreach ($rp in $runtimePackages) {
+                            if ($pn -match [regex]::Escape($rp)) {
+                                Remove-ItemProperty -Path $kpPath -Name $pn -Force -ErrorAction SilentlyContinue | Out-Null
+                            }
+                        }
+                    }
+                }
+
                 foreach ($k in $knownPackages.Keys) {
                     Set-ItemProperty -Path $kpPath -Name $k -Value $knownPackages[$k] -Force -ErrorAction SilentlyContinue | Out-Null
                 }

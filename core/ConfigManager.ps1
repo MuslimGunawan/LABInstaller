@@ -1143,27 +1143,19 @@ function Repair-Delphi7LicenseAndEnvironment {
         }
     }
 
-    # Daftarkan ke Known Packages jika berkas BPL tersedia
-    $dstBpl = Join-Path -Path $installDir -ChildPath "Projects\Bpl"
     if (Test-Path -Path $bplCheck) {
+        $dstBpl = Join-Path -Path $installDir -ChildPath "Projects\Bpl"
+        # HANYA daftarkan Design-time packages (*DsnD7.bpl).
+        # JANGAN daftarkan Runtime packages (*PkgD7.bpl) karena akan memicu dialog "can't be installed because it is not a design time package".
         $knownPackages = @{
-            (Join-Path -Path $dstBpl -ChildPath "OpenWirePkgD7.bpl")             = "OpenWire Package"
             (Join-Path -Path $dstBpl -ChildPath "OpenWireDsnD7.bpl")             = "OpenWire Pin Editors"
-            (Join-Path -Path $dstBpl -ChildPath "SignalLabBasicPkgD7.bpl")       = "SignalLab Basic Package"
             (Join-Path -Path $dstBpl -ChildPath "SignalLabBasicDsnD7.bpl")       = "SignalLab Basic Design Package"
-            (Join-Path -Path $dstBpl -ChildPath "TimingLabBasicPkgD7.bpl")       = "TimingLab Basic Package"
             (Join-Path -Path $dstBpl -ChildPath "TimingLabBasicDsnD7.bpl")       = "TimingLab Basic Design Package"
-            (Join-Path -Path $dstBpl -ChildPath "AudioLabBasicPkgD7.bpl")        = "AudioLab Basic Package"
             (Join-Path -Path $dstBpl -ChildPath "AudioLabBasicDsnD7.bpl")        = "AudioLab Basic Design Package"
-            (Join-Path -Path $dstBpl -ChildPath "MediaLabBasicPkgD7.bpl")        = "MediaLab Basic Package"
             (Join-Path -Path $dstBpl -ChildPath "MediaLabBasicDsnD7.bpl")        = "MediaLab Basic Design Package"
-            (Join-Path -Path $dstBpl -ChildPath "VideoLabBasicPkgD7.bpl")        = "VideoLab Basic Package"
             (Join-Path -Path $dstBpl -ChildPath "VideoLabBasicDsnD7.bpl")        = "VideoLab Basic Design Package"
-            (Join-Path -Path $dstBpl -ChildPath "VideoLabAdditionalPkgD7.bpl")   = "VideoLab Additional Package"
             (Join-Path -Path $dstBpl -ChildPath "VideoLabAdditionalDsnD7.bpl")   = "VideoLab Additional Design Package"
-            (Join-Path -Path $dstBpl -ChildPath "IntelligenceLabBasicPkgD7.bpl") = "IntelligenceLab Basic Package"
             (Join-Path -Path $dstBpl -ChildPath "IntelligenceLabBasicDsnD7.bpl") = "IntelligenceLab Basic Design Package"
-            (Join-Path -Path $dstBpl -ChildPath "VisionLabPkgD7.bpl")            = "VisionLab Package"
             (Join-Path -Path $dstBpl -ChildPath "VisionLabDsnD7.bpl")            = "VisionLab Design Package"
         }
 
@@ -1172,9 +1164,27 @@ function Repair-Delphi7LicenseAndEnvironment {
             "HKLM:\SOFTWARE\WOW6432Node\Borland\Delphi\7.0\Known Packages",
             "HKLM:\SOFTWARE\Borland\Delphi\7.0\Known Packages"
         )
+        $runtimePackages = @(
+            "OpenWirePkgD7.bpl", "SignalLabBasicPkgD7.bpl", "TimingLabBasicPkgD7.bpl",
+            "AudioLabBasicPkgD7.bpl", "MediaLabBasicPkgD7.bpl", "VideoLabBasicPkgD7.bpl",
+            "VideoLabAdditionalPkgD7.bpl", "IntelligenceLabBasicPkgD7.bpl", "VisionLabPkgD7.bpl"
+        )
         foreach ($kpPath in $kpTargets) {
             try {
                 if (-not (Test-Path -Path $kpPath)) { New-Item -Path $kpPath -Force | Out-Null }
+
+                # Bersihkan entri runtime package (*PkgD7.bpl) agar Delphi tidak memunculkan dialog error
+                $propNames = (Get-Item -Path $kpPath -ErrorAction SilentlyContinue).Property
+                if ($propNames) {
+                    foreach ($pn in $propNames) {
+                        foreach ($rp in $runtimePackages) {
+                            if ($pn -match [regex]::Escape($rp)) {
+                                Remove-ItemProperty -Path $kpPath -Name $pn -Force -ErrorAction SilentlyContinue | Out-Null
+                            }
+                        }
+                    }
+                }
+
                 foreach ($k in $knownPackages.Keys) {
                     Set-ItemProperty -Path $kpPath -Name $k -Value $knownPackages[$k] -Force -ErrorAction SilentlyContinue | Out-Null
                 }
