@@ -1076,6 +1076,22 @@ function Repair-Delphi7LicenseAndEnvironment {
         } catch {}
     }
 
+    # Konfigurasi Just-in-Time Debugger (AeDebug) otomatis agar Delphi tidak memicu popup dialog debugger
+    try {
+        $borDbg = Join-Path -Path $installDir -ChildPath "Bin\bordbg70.exe"
+        if (Test-Path -Path $borDbg) {
+            $aeDebugPaths = @(
+                "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AeDebug",
+                "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows NT\CurrentVersion\AeDebug"
+            )
+            foreach ($aep in $aeDebugPaths) {
+                if (-not (Test-Path -Path $aep)) { New-Item -Path $aep -Force | Out-Null }
+                Set-ItemProperty -Path $aep -Name "Debugger" -Value "`"$borDbg`" -aegrs %ld %ld" -Force -ErrorAction SilentlyContinue | Out-Null
+                Set-ItemProperty -Path $aep -Name "Auto" -Value "1" -Force -ErrorAction SilentlyContinue | Out-Null
+            }
+        }
+    } catch {}
+
     # 4. Kebijakan Windows 11 AppCompat (PCA Hard Block Bypass) & Exploit Protection
     try {
         $pcaPolPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppCompat"

@@ -1,7 +1,7 @@
 {
-  "version": "1.0.21",
+  "version": "1.0.22",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-14",
-  "description": "v1.0.21: Penambahan modul auto-repair lisensi & Windows 11 AppCompat Delphi 7 langsung pada opsi menu [3] dan [1], penyertaan berkas aktivasi resmi apps/dent.slip, serta klarifikasi opsi pembaruan GitHub menu [4]."
+  "description": "v1.0.22: Otomatisasi pendaftaran AeDebug (eliminasi dialog Just-in-Time Debugger Delphi 7 bordbg70.exe), verifikasi menyeluruh ketersediaan paket VisionLab/VideoLab BPL di Component Palette."
 }
