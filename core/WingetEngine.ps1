@@ -360,7 +360,12 @@ function Install-LocalFilePackage {
                     Write-LogSuccess "$pkgName berhasil dipasang."
                     return $true
                 }
-                Write-LogError "Pemasangan EXE gagal dengan kode keluar: $($p.ExitCode)"
+                if ($p.ExitCode -eq -2147024784 -or $p.ExitCode -eq 2147942512) {
+                    Write-LogError "Pemasangan $pkgName GAGAL KARENA RUANG DISK PENUH (ERROR_DISK_FULL - 0x80070070)!"
+                    Write-LogWarning "Mohon perbesar kapasitas disk Virtual Machine atau kosongkan minimal 8-12 GB di Drive C:."
+                } else {
+                    Write-LogError "Pemasangan EXE gagal dengan kode keluar: $($p.ExitCode)"
+                }
                 return $false
             }
         }

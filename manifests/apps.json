@@ -184,9 +184,9 @@
     "registryPattern": "Visual Studio Community 2022",
     "pathCheck": "C:\\Program Files*\\Microsoft Visual Studio\\*\\Community\\Common7\\IDE\\devenv.exe",
     "preferDirect": true,
-    "installOverride": "\"--add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended --passive --norestart --wait\"",
+    "installOverride": "\"--add Microsoft.VisualStudio.Workload.NativeDesktop --passive --norestart --wait\"",
     "directUrl": "https://aka.ms/vs/17/release/vs_community.exe",
-    "directArgs": "--add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended --passive --norestart --wait",
+    "directArgs": "--add Microsoft.VisualStudio.Workload.NativeDesktop --passive --norestart --wait",
     "installType": "exe",
     "fileName": "vs_community.exe",
     "description": "IDE resmi Microsoft lengkap dengan workload Desktop development with C++ untuk praktikum Lab."

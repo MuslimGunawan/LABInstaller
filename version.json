@@ -1,7 +1,7 @@
 {
-  "version": "1.0.26",
+  "version": "1.0.27",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-14",
-  "description": "v1.0.26: Perbaikan deteksi Visual Studio Community 2022 (isolasi dari VS Code), pengoptimalan bootstrapper C++ Desktop dev, dan otomatisasi konfigurasi Flutter SDK & Android Toolchain (adb, JDK, licenses) untuk flutter doctor 100% centang hijau."
+  "description": "v1.0.27: Otomatisasi instalasi cmdline-tools resmi Google untuk Android SDK, perizinan firewall adb.exe (bebas popup), peringatan ramah disk full 0x80070070, dan penyusutan ukuran instalasi Visual Studio C++ ke komponen esensial."
 }

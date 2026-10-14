@@ -701,7 +701,9 @@ function Configure-FirewallRules {
         @{ Name = "LAB: PHP (XAMPP)";                  Pattern = "C:\xampp\php\php.exe" },
         @{ Name = "LAB: Git Executable";               Pattern = "C:\Program Files\Git\bin\git.exe" },
         @{ Name = "LAB: OpenJDK / Java Runtime";       Pattern = "C:\Program Files\Eclipse Adoptium\*\bin\java.exe" },
-        @{ Name = "LAB: OpenJDK Java (Zulu/Other)";    Pattern = "C:\Program Files\*\bin\java.exe" }
+        @{ Name = "LAB: OpenJDK Java (Zulu/Other)";    Pattern = "C:\Program Files\*\bin\java.exe" },
+        @{ Name = "LAB: Android Debug Bridge (ADB)";   Pattern = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" },
+        @{ Name = "LAB: Android Debug Bridge (System)";Pattern = "C:\Android\Sdk\platform-tools\adb.exe" }
     )
 
     $configuredCount = 0
@@ -1326,6 +1328,57 @@ function Configure-FlutterAndAndroidEnvironment {
         }
     }
 
+    # Daftarkan aturan Firewall untuk adb.exe agar bebas popup dialog pemblokiran
+    if (Test-Path -Path $adbPath) {
+        try {
+            netsh advfirewall firewall delete rule name="LAB: Android Debug Bridge (ADB-In)" 2>$null | Out-Null
+            netsh advfirewall firewall delete rule name="LAB: Android Debug Bridge (ADB-Out)" 2>$null | Out-Null
+            netsh advfirewall firewall add rule name="LAB: Android Debug Bridge (ADB-In)" dir=in action=allow program="$adbPath" enable=yes profile=any 2>&1 | Out-Null
+            netsh advfirewall firewall add rule name="LAB: Android Debug Bridge (ADB-Out)" dir=out action=allow program="$adbPath" enable=yes profile=any 2>&1 | Out-Null
+            Write-LogSuccess "Aturan Firewall otomatis untuk adb.exe berhasil diterapkan (Bebas Popup Blokir)."
+        } catch {}
+    }
+
+    # Pastikan Android SDK Command-line Tools (cmdline-tools/latest) tersedia
+    $cmdlineBat = Join-Path -Path $sdkDir -ChildPath "cmdline-tools\latest\bin\sdkmanager.bat"
+    if (-not (Test-Path -Path $cmdlineBat)) {
+        Write-LogInfo "Mengunduh Android SDK Command-line Tools resmi Google (~140 MB)..."
+        $cmdlineZip = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "commandlinetools.zip"
+        $cmdlineTempExtract = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "cmdline_extract"
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            (New-Object Net.WebClient).DownloadFile("https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip", $cmdlineZip)
+            if (Test-Path -Path $cmdlineZip) {
+                Write-LogInfo "Mengekstrak Android SDK Command-line Tools..."
+                $sevenZip = "C:\Program Files\7-Zip\7z.exe"
+                if (Test-Path -Path $sevenZip) {
+                    & $sevenZip x "$cmdlineZip" "-o$cmdlineTempExtract" -y | Out-Null
+                } else {
+                    Expand-Archive -Path $cmdlineZip -DestinationPath $cmdlineTempExtract -Force
+                }
+
+                $extractedCmdline = Join-Path -Path $cmdlineTempExtract -ChildPath "cmdline-tools"
+                $targetLatest = Join-Path -Path $sdkDir -ChildPath "cmdline-tools\latest"
+                $cmdlineParent = Split-Path -Parent $targetLatest
+                if (-not (Test-Path -Path $cmdlineParent)) {
+                    New-Item -ItemType Directory -Path $cmdlineParent -Force | Out-Null
+                }
+                if (Test-Path -Path $targetLatest) {
+                    Remove-Item -Path $targetLatest -Recurse -Force -ErrorAction SilentlyContinue
+                }
+
+                if (Test-Path -Path $extractedCmdline) {
+                    Move-Item -Path $extractedCmdline -Destination $targetLatest -Force
+                    Write-LogSuccess "Android SDK Command-line Tools (sdkmanager) berhasil dipasang ke $targetLatest!"
+                }
+
+                Remove-Item -Path $cmdlineZip, $cmdlineTempExtract -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        } catch {
+            Write-LogWarning "Gagal mengunduh cmdline-tools otomatis: $_"
+        }
+    }
+
     # Daftarkan variabel lingkungan ANDROID_HOME & ANDROID_SDK_ROOT
     try {
         [Environment]::SetEnvironmentVariable("ANDROID_HOME", $sdkDir, "Machine")
@@ -1336,19 +1389,23 @@ function Configure-FlutterAndAndroidEnvironment {
         & $flutterExe config --android-sdk "$sdkDir" 2>$null | Out-Null
         Write-LogSuccess "Flutter dikonfigurasi dengan Android SDK: $sdkDir"
 
-        # Tambahkan platform-tools ke PATH sistem
+        # Tambahkan platform-tools & cmdline-tools ke PATH sistem
         $ptDir = Join-Path -Path $sdkDir -ChildPath "platform-tools"
         if (Test-Path -Path $ptDir) {
             Add-DirectoryToPath -PathToAdd $ptDir -Scope "Machine" | Out-Null
         }
+        $clDir = Join-Path -Path $sdkDir -ChildPath "cmdline-tools\latest\bin"
+        if (Test-Path -Path $clDir) {
+            Add-DirectoryToPath -PathToAdd $clDir -Scope "Machine" | Out-Null
+        }
     } catch {}
 
-    # 4. Otomatisasi Lisensi Android (Accept all licenses)
+    # 4. Otomatisasi Lisensi Android (Accept all licenses via sdkmanager / flutter doctor)
     try {
-        Write-LogInfo "Menyetujui lisensi resmi Android SDK (flutter doctor --android-licenses)..."
-        $yesInputs = ("y`n" * 15)
+        Write-LogInfo "Menyetujui seluruh lisensi resmi Android SDK (flutter doctor --android-licenses)..."
+        $yesInputs = ("y`n" * 20)
         $yesInputs | & $flutterExe doctor --android-licenses 2>$null | Out-Null
-        Write-LogSuccess "Pemeriksaan lisensi Android SDK selesai."
+        Write-LogSuccess "Pemeriksaan dan persetujuan lisensi Android SDK berhasil diselesaikan!"
     } catch {}
 
     Write-LogSuccess "Ekosistem Flutter & Android Toolchain berhasil diselaraskan!"
