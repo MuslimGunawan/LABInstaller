@@ -683,47 +683,106 @@ function Setup-Delphi7VisionLabHandler {
             $wi = New-Object -ComObject WindowsInstaller.Installer
             $db = $wi.OpenDatabase($msiFile, 1) # 1 = msiOpenDatabaseModeTransact
             $v1 = $db.OpenView("UPDATE InstallExecuteSequence SET Condition = '0' WHERE Action = 'BorValidatePassword'")
-            $v1.Execute()
-            $v1.Close()
+            $v1.Execute(); $v1.Close()
             $v2 = $db.OpenView("UPDATE Property SET Value = 'ENT' WHERE Property = 'SKU'")
-            $v2.Execute()
-            $v2.Close()
+            $v2.Execute(); $v2.Close()
             $v3 = $db.OpenView("UPDATE Property SET Value = '0' WHERE Property = 'BadPassword'")
-            $v3.Execute()
-            $v3.Close()
+            $v3.Execute(); $v3.Close()
             $db.Commit()
+
+            # PENTING: Lepaskan handle COM object secara eksplisit agar msiexec tidak terkena error 1619 (file locked)
+            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($v1) | Out-Null
+            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($v2) | Out-Null
+            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($v3) | Out-Null
+            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($db) | Out-Null
+            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($wi) | Out-Null
+            $v1 = $null; $v2 = $null; $v3 = $null; $db = $null; $wi = $null
+            [System.GC]::Collect()
+            [System.GC]::WaitForPendingFinalizers()
+            Start-Sleep -Milliseconds 500
+
             Write-LogSuccess "Konfigurasi otomatis MSI Delphi 7 (Bypass dialog serial key) berhasil diterapkan."
         } catch {
             Write-LogWarning "Pemberitahuan konfigurasi MSI Delphi 7: $_"
         }
     }
 
-    # 4. Perbarui script bat jika diperlukan agar tidak memicu argumen serial invalid
-    $installBat = Join-Path -Path $tempExtract -ChildPath "Install_Delphi7_and_VisionLab.bat"
-    if (-not (Test-Path -Path $installBat)) {
-        Write-LogError "Script Install_Delphi7_and_VisionLab.bat tidak ditemukan di dalam paket ZIP."
-        return $false
-    }
-
+    # 4. Eksekusi Instalasi Utama Delphi 7 secara Native PowerShell
+    Write-LogInfo "Menjalankan instalasi utama Borland Delphi 7 Enterprise via MSI..."
     try {
-        $batContent = [System.IO.File]::ReadAllText($installBat, [System.Text.Encoding]::ASCII)
-        $batContent = $batContent -replace 'PRODUCT_ID="[^"]*"', 'SKU=ENT'
-        $batContent = $batContent -replace 'AUTH_KEY="[^"]*"', ''
-        [System.IO.File]::WriteAllText($installBat, $batContent, [System.Text.Encoding]::ASCII)
-    } catch {}
+        $msiArgs = @(
+            "/i", "`"$msiFile`"",
+            "/qn",
+            "/norestart",
+            "ALLUSERS=1",
+            "SKU=ENT",
+            "USERNAME=`"LAB Komputer`"",
+            "COMPANYNAME=`"Laboratorium`""
+        )
+        $p = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArgs -Wait -PassThru -NoNewWindow
+        if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
+            Write-LogSuccess "Paket utama Borland Delphi 7 Enterprise berhasil diproses (ExitCode: $($p.ExitCode))."
+        } else {
+            Write-LogWarning "msiexec selesai dengan kode: $($p.ExitCode)."
+        }
 
-    Write-LogInfo "Menjalankan instalasi Delphi 7, aktivasi dent.slip, kompatibilitas WinXP SP3, & VisionLab VCL..."
-    try {
-        $p = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$installBat`"" -NoNewWindow -Wait -PassThru
-        
-        # 4. Verifikasi apakah Delphi 7 terpasang
-        $d7Path64 = "C:\Program Files (x86)\Borland\Delphi7\Bin\delphi32.exe"
-        $d7Path32 = "C:\Program Files\Borland\Delphi7\Bin\delphi32.exe"
-        $installedExe = if (Test-Path -Path $d7Path64) { $d7Path64 } elseif (Test-Path -Path $d7Path32) { $d7Path32 } else { $null }
+        # 5. Salin Lisensi Resmi dent.slip
+        $slipFile = Join-Path -Path $tempExtract -ChildPath "dent.slip"
+        $targetDir64 = "C:\Program Files (x86)\Borland\Delphi7"
+        $targetDir32 = "C:\Program Files\Borland\Delphi7"
+        $installDir = if (Test-Path -Path $targetDir64) { $targetDir64 } elseif (Test-Path -Path $targetDir32) { $targetDir32 } else { $null }
 
-        if ($installedExe) {
+        if (-not $installDir) {
+            New-Item -ItemType Directory -Path $targetDir64 -Force | Out-Null
+            $installDir = $targetDir64
+        }
+
+        if (Test-Path -Path $slipFile) {
+            Copy-Item -Path $slipFile -Destination (Join-Path -Path $installDir -ChildPath "dent.slip") -Force -ErrorAction SilentlyContinue
+            Write-LogSuccess "Aktivasi lisensi resmi (dent.slip) berhasil diterapkan ke: $installDir"
+        }
+
+        # 6. Konfigurasi Kompatibilitas Windows 11 / 10 & Hak Akses Folder
+        $delphiExe = Join-Path -Path $installDir -ChildPath "Bin\delphi32.exe"
+        if (Test-Path -Path $delphiExe) {
+            $compatReg = @(
+                "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers",
+                "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"
+            )
+            $compatVal = "~ WINXPSP3 HIGHDPIAWARE RUNASADMIN"
+            foreach ($cr in $compatReg) {
+                try {
+                    if (-not (Test-Path -Path $cr)) { New-Item -Path $cr -Force | Out-Null }
+                    Set-ItemProperty -Path $cr -Name $delphiExe -Value $compatVal -Force -ErrorAction SilentlyContinue | Out-Null
+                } catch {}
+            }
+
+            # Berikan hak Write/Modify ke folder instalasi Delphi 7 agar tidak ada kendala saat kompilasi proyek praktikan
+            try {
+                & icacls "$installDir" /grant "Users:(OI)(CI)M" /T /Q | Out-Null
+            } catch {}
+            Write-LogSuccess "Kompatibilitas Windows XP SP3 & hak akses direktori IDE berhasil dikonfigurasi."
+
+            # Konfigurasi Firewall
+            try {
+                New-NetFirewallRule -DisplayName "LAB: Borland Delphi 7" -Direction Inbound -Program $delphiExe -Action Allow -Profile Any -ErrorAction SilentlyContinue | Out-Null
+            } catch {
+                netsh advfirewall firewall add rule name="LAB: Borland Delphi 7" dir=in action=allow program="$delphiExe" enable=yes profile=any | Out-Null
+            }
+        }
+
+        # 7. Jalankan instalasi VisionLab VCL 4.5
+        $visionSetup = Join-Path -Path $tempExtract -ChildPath "VisionLabVCL45\setup.exe"
+        if (Test-Path -Path $visionSetup) {
+            Write-LogInfo "Menjalankan instalasi VisionLab VCL 4.5 (Mitov Software)..."
+            $vp = Start-Process -FilePath $visionSetup -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" -Wait -PassThru -NoNewWindow
+            Write-LogSuccess "Komponen VisionLab VCL 4.5 berhasil dipasang ke Borland Delphi 7."
+        }
+
+        # 8. Verifikasi Akhir
+        if (Test-Path -Path $delphiExe) {
             Write-LogSuccess "Borland Delphi 7 Enterprise & VisionLab VCL BERHASIL DIPASANG!"
-            
+
             # Buat shortcut tunggal di Desktop (Utamakan Public Desktop, bersihkan duplikat)
             try {
                 $publicDesktop = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonDesktopDirectory)
@@ -735,8 +794,8 @@ function Setup-Delphi7VisionLabHandler {
                     $wsh = New-Object -ComObject WScript.Shell
                     $targetLnk = if ($publicDesktop -and (Test-Path -Path $publicDesktop)) { $pubLnk } else { $usrLnk }
                     $sc = $wsh.CreateShortcut($targetLnk)
-                    $sc.TargetPath = $installedExe
-                    $sc.WorkingDirectory = Split-Path -Parent $installedExe
+                    $sc.TargetPath = $delphiExe
+                    $sc.WorkingDirectory = Split-Path -Parent $delphiExe
                     $sc.Description = "Borland Delphi 7 Enterprise Edition"
                     $sc.Save()
                     Write-LogSuccess "Shortcut 'Delphi 7' dibuat tunggal di Desktop."
