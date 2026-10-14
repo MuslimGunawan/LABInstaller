@@ -624,3 +624,95 @@ function Setup-XamppEnvironment {
         Configure-WebServerPorts
     }
 }
+
+function Setup-Delphi7VisionLabHandler {
+    Write-LogStep "MEMPROSES INSTALASI OTOMATIS BORLAND DELPHI 7 & VISIONLAB VCL..."
+    Refresh-CurrentSessionEnvironment
+
+    $appsDir = Get-AppStorageDirectory
+    $bundleZip = Join-Path -Path $appsDir -ChildPath "Delphi7_VisionLab_Bundle.zip"
+    $localBundleBackup = "D:\KP\Delphi7_VisionLab_Bundle.zip"
+
+    # 1. Pastikan berkas bundle ZIP tersedia
+    if (-not (Test-Path -Path $bundleZip)) {
+        if (Test-Path -Path $localBundleBackup) {
+            Write-LogInfo "Menyalin bundle installer dari penyimpanan lokal ($localBundleBackup)..."
+            Copy-Item -Path $localBundleBackup -Destination $bundleZip -Force -ErrorAction SilentlyContinue
+        } else {
+            # Unduh dari Google Drive Mirror jika mirror IDs terkonfigurasi
+            $delphiPkg = (Load-AllManifestPackages -ManifestDir (Join-Path -Path (Get-Location).Path -ChildPath "manifests")) | Where-Object { $_.id -eq "Borland.Delphi.7" }
+            if ($delphiPkg -and $delphiPkg.gdriveMirrors -and $delphiPkg.gdriveMirrors.Count -gt 0) {
+                Write-LogInfo "Mengunduh Delphi 7 & VisionLab Bundle dari Google Drive..."
+                Invoke-GoogleDriveMultiMirrorDownload -MirrorIds $delphiPkg.gdriveMirrors -DestinationPath $bundleZip -AppName "Borland Delphi 7 + VisionLab" | Out-Null
+            }
+        }
+    }
+
+    if (-not (Test-Path -Path $bundleZip)) {
+        Write-LogError "Berkas Delphi7_VisionLab_Bundle.zip tidak ditemukan di folder apps maupun D:\KP."
+        return $false
+    }
+
+    # 2. Ekstrak bundle ke folder temporary
+    $tempExtract = Join-Path -Path $env:TEMP -ChildPath "Delphi7_VisionLab_Install"
+    if (Test-Path -Path $tempExtract) {
+        Remove-Item -Path $tempExtract -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    New-Item -ItemType Directory -Path $tempExtract -Force | Out-Null
+
+    Write-LogInfo "Mengekstrak paket installer Delphi 7 & VisionLab..."
+    $sevenZip = "C:\Program Files\7-Zip\7z.exe"
+    if (Test-Path -Path $sevenZip) {
+        & $sevenZip x "$bundleZip" "-o$tempExtract" -y | Out-Null
+    } else {
+        Expand-Archive -Path $bundleZip -DestinationPath $tempExtract -Force
+    }
+
+    # 3. Jalankan script Install_Delphi7_and_VisionLab.bat
+    $installBat = Join-Path -Path $tempExtract -ChildPath "Install_Delphi7_and_VisionLab.bat"
+    if (-not (Test-Path -Path $installBat)) {
+        Write-LogError "Script Install_Delphi7_and_VisionLab.bat tidak ditemukan di dalam paket ZIP."
+        return $false
+    }
+
+    Write-LogInfo "Menjalankan instalasi Delphi 7, aktivasi dent.slip, kompatibilitas WinXP SP3, & VisionLab VCL..."
+    try {
+        $p = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$installBat`"" -NoNewWindow -Wait -PassThru
+        
+        # 4. Verifikasi apakah Delphi 7 terpasang
+        $d7Path64 = "C:\Program Files (x86)\Borland\Delphi7\Bin\delphi32.exe"
+        $d7Path32 = "C:\Program Files\Borland\Delphi7\Bin\delphi32.exe"
+        $installedExe = if (Test-Path -Path $d7Path64) { $d7Path64 } elseif (Test-Path -Path $d7Path32) { $d7Path32 } else { $null }
+
+        if ($installedExe) {
+            Write-LogSuccess "Borland Delphi 7 Enterprise & VisionLab VCL BERHASIL DIPASANG!"
+            
+            # Buat shortcut di Desktop Publik
+            try {
+                $publicDesktop = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonDesktopDirectory)
+                $scPath = Join-Path -Path $publicDesktop -ChildPath "Delphi 7.lnk"
+                $wsh = New-Object -ComObject WScript.Shell
+                $sc = $wsh.CreateShortcut($scPath)
+                $sc.TargetPath = $installedExe
+                $sc.WorkingDirectory = Split-Path -Parent $installedExe
+                $sc.Description = "Borland Delphi 7 Enterprise Edition"
+                $sc.Save()
+                Write-LogSuccess "Shortcut 'Delphi 7' dibuat di Desktop."
+            } catch {}
+
+            return $true
+        } else {
+            Write-LogError "Instalasi selesai namun executable delphi32.exe belum terdeteksi."
+            return $false
+        }
+    }
+    catch {
+        Write-LogError "Gagal mengeksekusi instalasi Delphi 7: $_"
+        return $false
+    }
+    finally {
+        # Bersihkan folder temporary ekstrak
+        Remove-Item -Path $tempExtract -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+

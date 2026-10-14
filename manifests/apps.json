@@ -188,5 +188,18 @@
     "installType": "exe",
     "fileName": "vs_community.exe",
     "description": "IDE resmi Microsoft lengkap dengan workload Desktop development with C++ untuk praktikum Lab."
+  },
+  {
+    "id": "Borland.Delphi.7",
+    "name": "Borland Delphi 7 Enterprise & VisionLab VCL",
+    "category": "Classic Desktop IDE & Vision Lab",
+    "type": "custom",
+    "priority": 23,
+    "customHandler": "Setup-Delphi7VisionLabHandler",
+    "registryPattern": "(Borland Delphi 7|Delphi 7)",
+    "pathCheck": "C:\\Program Files*\\Borland\\Delphi7\\Bin\\delphi32.exe",
+    "fileName": "Delphi7_VisionLab_Bundle.zip",
+    "gdriveMirrors": [],
+    "description": "IDE klasik Borland Delphi 7 Enterprise lengkap dengan aktivasi dent.slip dan komponen VisionLab VCL 4.5 untuk praktikum pengolahan citra."
   }
 ]

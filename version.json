@@ -1,7 +1,7 @@
 {
-  "version": "1.0.14",
+  "version": "1.0.15",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-14",
-  "description": "v1.0.14: Otomatisasi izin Windows Firewall (Auto-Allow Inbound TCP/UDP) untuk seluruh layanan (Apache, Nginx, MySQL, PostgreSQL, Redis, Memcached, Node.js, Python, PHP, Java) agar bebas dari popup dialog Windows Security Alert"
+  "description": "v1.0.15: Penambahan paket Borland Delphi 7 Enterprise & VisionLab VCL 4.5 ke Menu [1] Instalasi Pintar (Auto-Install, lisensi dent.slip, fix kompatibilitas Windows 11/10 & firewall)"
 }
