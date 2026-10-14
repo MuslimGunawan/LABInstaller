@@ -1,7 +1,7 @@
 {
-  "version": "1.0.19",
+  "version": "1.0.20",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-14",
-  "description": "v1.0.19: Perbaikan tuntas instalasi Delphi 7 (eliminasi error 1619 via pelepasan handle COM lock, eksekusi native MSI/dent.slip/VisionLab langsung dari PowerShell, perbaikan sintaks skrip batch)"
+  "description": "v1.0.20: Perbaikan tuntas aktivasi lisensi Borland Delphi 7 Enterprise (injeksi Serial & Auth Key ke MSI & Registry, pembersihan cache lisensi korup .borland), bypass otomatis Windows 11 PCA hard block & Exploit Protection, otomatisasi dialog Warning VisionLab VCL 4.5, dan penjagaan shortcut desktop tunggal."
 }

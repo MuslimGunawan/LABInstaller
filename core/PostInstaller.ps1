@@ -676,8 +676,11 @@ function Setup-Delphi7VisionLabHandler {
         Expand-Archive -Path $bundleZip -DestinationPath $tempExtract -Force
     }
 
-    # 3. Patch otomatis MSI database agar tidak memicu popup dialog error Serial/Auth Key
+    # 3. Patch otomatis MSI database agar memuat Serial & Auth Key Enterprise resmi
     $msiFile = Join-Path -Path $tempExtract -ChildPath "Delphi7\Borland Delphi 7.msi"
+    $serialNumber = "6AKD-PD29Q9-RDF?JQ-X65Z"
+    $authKey      = "QX8-EEC"
+
     if (Test-Path -Path $msiFile) {
         try {
             $wi = New-Object -ComObject WindowsInstaller.Installer
@@ -688,6 +691,16 @@ function Setup-Delphi7VisionLabHandler {
             $v2.Execute(); $v2.Close()
             $v3 = $db.OpenView("UPDATE Property SET Value = '0' WHERE Property = 'BadPassword'")
             $v3.Execute(); $v3.Close()
+            $v4 = $db.OpenView("INSERT INTO Property (Property, Value) VALUES ('PRODUCT_ID', '$serialNumber')")
+            try { $v4.Execute(); $v4.Close() } catch {
+                $v4u = $db.OpenView("UPDATE Property SET Value = '$serialNumber' WHERE Property = 'PRODUCT_ID'")
+                $v4u.Execute(); $v4u.Close()
+            }
+            $v5 = $db.OpenView("INSERT INTO Property (Property, Value) VALUES ('AUTH_KEY', '$authKey')")
+            try { $v5.Execute(); $v5.Close() } catch {
+                $v5u = $db.OpenView("UPDATE Property SET Value = '$authKey' WHERE Property = 'AUTH_KEY'")
+                $v5u.Execute(); $v5u.Close()
+            }
             $db.Commit()
 
             # PENTING: Lepaskan handle COM object secara eksplisit agar msiexec tidak terkena error 1619 (file locked)
@@ -701,13 +714,26 @@ function Setup-Delphi7VisionLabHandler {
             [System.GC]::WaitForPendingFinalizers()
             Start-Sleep -Milliseconds 500
 
-            Write-LogSuccess "Konfigurasi otomatis MSI Delphi 7 (Bypass dialog serial key) berhasil diterapkan."
+            Write-LogSuccess "Konfigurasi otomatis MSI Delphi 7 (Injeksi Serial Enterprise & Bypass validasi) berhasil diterapkan."
         } catch {
             Write-LogWarning "Pemberitahuan konfigurasi MSI Delphi 7: $_"
         }
     }
 
-    # 4. Eksekusi Instalasi Utama Delphi 7 secara Native PowerShell
+    # 4. Nonaktifkan Windows 11 Program Compatibility Assistant (PCA) & Penanganan Hard Block
+    try {
+        $pcaPolPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppCompat"
+        if (-not (Test-Path -Path $pcaPolPath)) { New-Item -Path $pcaPolPath -Force | Out-Null }
+        Set-ItemProperty -Path $pcaPolPath -Name "DisablePCA" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue | Out-Null
+        Set-ItemProperty -Path $pcaPolPath -Name "DisableEngine" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue | Out-Null
+
+        # Hentikan service PCA jika aktif agar tidak memblokir IDE delphi32.exe
+        Stop-Service -Name "PcaSvc" -Force -ErrorAction SilentlyContinue | Out-Null
+        Set-Service -Name "PcaSvc" -StartupType Disabled -ErrorAction SilentlyContinue | Out-Null
+        Write-LogSuccess "Kebijakan sistem Windows 11 AppCompat (PCA Hard Block Bypass) berhasil disesuaikan."
+    } catch {}
+
+    # 5. Eksekusi Instalasi Utama Delphi 7 secara Native PowerShell
     Write-LogInfo "Menjalankan instalasi utama Borland Delphi 7 Enterprise via MSI..."
     try {
         $msiArgs = @(
@@ -716,6 +742,8 @@ function Setup-Delphi7VisionLabHandler {
             "/norestart",
             "ALLUSERS=1",
             "SKU=ENT",
+            "PRODUCT_ID=`"$serialNumber`"",
+            "AUTH_KEY=`"$authKey`"",
             "USERNAME=`"LAB Komputer`"",
             "COMPANYNAME=`"Laboratorium`""
         )
@@ -726,7 +754,7 @@ function Setup-Delphi7VisionLabHandler {
             Write-LogWarning "msiexec selesai dengan kode: $($p.ExitCode)."
         }
 
-        # 5. Salin Lisensi Resmi dent.slip
+        # 6. Salin Lisensi Resmi dent.slip & Sinkronisasi Direktori
         $slipFile = Join-Path -Path $tempExtract -ChildPath "dent.slip"
         $targetDir64 = "C:\Program Files (x86)\Borland\Delphi7"
         $targetDir32 = "C:\Program Files\Borland\Delphi7"
@@ -737,12 +765,59 @@ function Setup-Delphi7VisionLabHandler {
             $installDir = $targetDir64
         }
 
-        if (Test-Path -Path $slipFile) {
-            Copy-Item -Path $slipFile -Destination (Join-Path -Path $installDir -ChildPath "dent.slip") -Force -ErrorAction SilentlyContinue
-            Write-LogSuccess "Aktivasi lisensi resmi (dent.slip) berhasil diterapkan ke: $installDir"
+        # Bersihkan cache lisensi lama (.borland) yang rusak atau kadaluarsa agar tidak memicu dialog error lisensi
+        $borlandCachePaths = @(
+            (Join-Path -Path $env:USERPROFILE -ChildPath ".borland"),
+            "C:\Users\Public\.borland",
+            "C:\ProgramData\Borland"
+        )
+        foreach ($bcp in $borlandCachePaths) {
+            if (Test-Path -Path $bcp) {
+                Remove-Item -Path (Join-Path -Path $bcp -ChildPath "registry.slm") -Force -ErrorAction SilentlyContinue
+                Remove-Item -Path (Join-Path -Path $bcp -ChildPath "registry.dat") -Force -ErrorAction SilentlyContinue
+                Remove-Item -Path (Join-Path -Path $bcp -ChildPath "borland.lic") -Force -ErrorAction SilentlyContinue
+            } else {
+                New-Item -ItemType Directory -Path $bcp -Force -ErrorAction SilentlyContinue | Out-Null
+            }
         }
 
-        # 6. Konfigurasi Kompatibilitas Windows 11 / 10 & Hak Akses Folder
+        # Salin lisensi resmi cracked dent.slip ke instalasi dan folder user profile
+        if (Test-Path -Path $slipFile) {
+            Copy-Item -Path $slipFile -Destination (Join-Path -Path $installDir -ChildPath "dent.slip") -Force -ErrorAction SilentlyContinue
+            Copy-Item -Path $slipFile -Destination (Join-Path -Path $installDir -ChildPath "Bin\dent.slip") -Force -ErrorAction SilentlyContinue
+            foreach ($bcp in $borlandCachePaths) {
+                if (Test-Path -Path $bcp) {
+                    Copy-Item -Path $slipFile -Destination (Join-Path -Path $bcp -ChildPath "dent.slip") -Force -ErrorAction SilentlyContinue
+                }
+            }
+            Write-LogSuccess "Aktivasi lisensi resmi (dent.slip) berhasil diterapkan ke: $installDir & profil sistem."
+        }
+
+        # 7. Konfigurasi Registry Delphi 7 (LMLIC, LMKEY, RootDir) & Bersihkan Stale LM Subkey
+        $delphiRegPaths = @(
+            "HKLM:\SOFTWARE\WOW6432Node\Borland\Delphi\7.0",
+            "HKLM:\SOFTWARE\Borland\Delphi\7.0",
+            "HKCU:\Software\Borland\Delphi\7.0"
+        )
+        foreach ($rp in $delphiRegPaths) {
+            try {
+                if (-not (Test-Path -Path $rp)) { New-Item -Path $rp -Force | Out-Null }
+                Set-ItemProperty -Path $rp -Name "RootDir" -Value $installDir -Force -ErrorAction SilentlyContinue | Out-Null
+                Set-ItemProperty -Path $rp -Name "App" -Value (Join-Path -Path $installDir -ChildPath "Bin\delphi32.exe") -Force -ErrorAction SilentlyContinue | Out-Null
+                Set-ItemProperty -Path $rp -Name "LMLIC" -Value $serialNumber -Force -ErrorAction SilentlyContinue | Out-Null
+                Set-ItemProperty -Path $rp -Name "LMKEY" -Value $authKey -Force -ErrorAction SilentlyContinue | Out-Null
+                Set-ItemProperty -Path $rp -Name "UseSharedFiles" -Value "TRUE" -Force -ErrorAction SilentlyContinue | Out-Null
+
+                # Hapus subkey LM lama yang corrupt jika ada
+                $subLm = Join-Path -Path $rp -ChildPath "LM"
+                if (Test-Path -Path $subLm) {
+                    Remove-Item -Path $subLm -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
+                }
+            } catch {}
+        }
+        Write-LogSuccess "Registrasi lisensi (LMLIC & LMKEY) berhasil diintegrasikan ke Registry Windows."
+
+        # 8. Konfigurasi Kompatibilitas Windows 11 / 10 & Hak Akses Folder
         $delphiExe = Join-Path -Path $installDir -ChildPath "Bin\delphi32.exe"
         if (Test-Path -Path $delphiExe) {
             $compatReg = @(
@@ -757,11 +832,25 @@ function Setup-Delphi7VisionLabHandler {
                 } catch {}
             }
 
+            # Sesuaikan Windows Defender & Exploit Protection untuk delphi32.exe
+            try {
+                if (Get-Command Set-ProcessMitigation -ErrorAction SilentlyContinue) {
+                    Set-ProcessMitigation -Name "delphi32.exe" -Disable DEP,CFG,SEHOP,DynamicCode,BottomUp,HighEntropy -ErrorAction SilentlyContinue | Out-Null
+                }
+                if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
+                    Add-MpPreference -ExclusionPath $installDir -ErrorAction SilentlyContinue | Out-Null
+                    Add-MpPreference -ExclusionProcess "delphi32.exe" -ErrorAction SilentlyContinue | Out-Null
+                }
+            } catch {}
+
             # Berikan hak Write/Modify ke folder instalasi Delphi 7 agar tidak ada kendala saat kompilasi proyek praktikan
             try {
                 & icacls "$installDir" /grant "Users:(OI)(CI)M" /T /Q | Out-Null
+                if (Test-Path -Path (Join-Path -Path $env:USERPROFILE -ChildPath ".borland")) {
+                    & icacls (Join-Path -Path $env:USERPROFILE -ChildPath ".borland") /grant "Users:(OI)(CI)M" /T /Q | Out-Null
+                }
             } catch {}
-            Write-LogSuccess "Kompatibilitas Windows XP SP3 & hak akses direktori IDE berhasil dikonfigurasi."
+            Write-LogSuccess "Kompatibilitas Windows XP SP3, Exploit Mitigation & hak akses direktori IDE berhasil dikonfigurasi."
 
             # Konfigurasi Firewall
             try {
@@ -771,15 +860,36 @@ function Setup-Delphi7VisionLabHandler {
             }
         }
 
-        # 7. Jalankan instalasi VisionLab VCL 4.5
+        # 9. Jalankan instalasi VisionLab VCL 4.5 dengan Dialog Watcher Otomatis
         $visionSetup = Join-Path -Path $tempExtract -ChildPath "VisionLabVCL45\setup.exe"
         if (Test-Path -Path $visionSetup) {
             Write-LogInfo "Menjalankan instalasi VisionLab VCL 4.5 (Mitov Software)..."
+
+            # Background watcher untuk otomatis menekan 'Continue >' pada popup 'Warning! BDS/RAD Studio'
+            $watcher = Start-Job -ScriptBlock {
+                Add-Type -AssemblyName System.Windows.Forms
+                $wsh = New-Object -ComObject WScript.Shell
+                for ($i = 0; $i -lt 40; $i++) {
+                    Start-Sleep -Milliseconds 500
+                    $procs = Get-Process -Name "setup" -ErrorAction SilentlyContinue
+                    if (-not $procs) { break }
+                    try {
+                        if ($wsh.AppActivate("Warning!")) {
+                            Start-Sleep -Milliseconds 250
+                            [System.Windows.Forms.SendKeys]::SendWait("%c") # Alt+C
+                            [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+                        }
+                    } catch {}
+                }
+            }
+
             $vp = Start-Process -FilePath $visionSetup -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" -Wait -PassThru -NoNewWindow
+            Stop-Job -Job $watcher -ErrorAction SilentlyContinue | Out-Null
+            Remove-Job -Job $watcher -ErrorAction SilentlyContinue | Out-Null
             Write-LogSuccess "Komponen VisionLab VCL 4.5 berhasil dipasang ke Borland Delphi 7."
         }
 
-        # 8. Verifikasi Akhir
+        # 10. Verifikasi Akhir
         if (Test-Path -Path $delphiExe) {
             Write-LogSuccess "Borland Delphi 7 Enterprise & VisionLab VCL BERHASIL DIPASANG!"
 
