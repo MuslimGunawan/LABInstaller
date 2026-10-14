@@ -1,7 +1,7 @@
 {
-  "version": "1.0.28",
+  "version": "1.0.29",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-14",
-  "description": "v1.0.28: Penambahan fitur aktivasi otomatis Microsoft Windows (HWID Digital License) & Microsoft Office (Ohook Perpetual) terintegrasi ke Opsi [1], Opsi [3], dan menu mandiri Opsi [5]."
+  "description": "v1.0.29: Perbaikan kompatibilitas LF/CRLF line endings pada skrip aktivasi Windows & Office (eliminasi error massgrave LF check) dengan penegakan CRLF otomatis dan bypass findstr."
 }

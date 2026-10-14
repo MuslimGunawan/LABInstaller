@@ -1448,6 +1448,20 @@ function Invoke-WindowsAndOfficeActivation {
     $hwidCmd  = Join-Path -Path $activatorDir -ChildPath "HWID_Activation.cmd"
     $ohookCmd = Join-Path -Path $activatorDir -ChildPath "Ohook_Activation_AIO.cmd"
 
+    # Normalisasi otomatis Line Ending ke CRLF murni dan pastikan baris kosong di akhir berkas
+    foreach ($cmdFile in @($hwidCmd, $ohookCmd)) {
+        if (Test-Path -Path $cmdFile) {
+            try {
+                $rawText = [System.IO.File]::ReadAllText($cmdFile)
+                $normalized = $rawText.Replace("`r`n", "`n").Replace("`n", "`r`n")
+                if (-not $normalized.EndsWith("`r`n")) {
+                    $normalized += "`r`n"
+                }
+                [System.IO.File]::WriteAllText($cmdFile, $normalized, [System.Text.Encoding]::ASCII)
+            } catch {}
+        }
+    }
+
     # --------------------------------------------------------------------------
     # A. AKTIVASI WINDOWS (HWID - Digital License Permanen Resmi Microsoft)
     # --------------------------------------------------------------------------

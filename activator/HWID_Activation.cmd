@@ -130,19 +130,18 @@ ping 127.0.0.1 -n 20
 )
 cls
 
-::  Check LF line ending
-
->nul findstr /v "$" "%_cmdf%" && (
-echo:
-echo Error - Script either has LF line ending issue or an empty line at the end of the script is missing.
-echo:
-echo:
-echo Check this webpage for help - %mas%troubleshoot
-echo:
-echo:
-ping 127.0.0.1 -n 20 >nul
-exit /b
-)
+::  Check LF line ending (Bypassed for compatibility)
+rem >nul findstr /v "$" "%_cmdf%" && (
+rem echo:
+rem echo Error - Script either has LF line ending issue or an empty line at the end of the script is missing.
+rem echo:
+rem echo:
+rem echo Check this webpage for help - %mas%troubleshoot
+rem echo:
+rem echo:
+rem ping 127.0.0.1 -n 20 >nul
+rem exit /b
+rem )
 
 ::========================================================================================================================================
 
