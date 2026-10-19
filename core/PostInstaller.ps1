@@ -238,18 +238,22 @@ function Install-ComposerOfficial {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         (New-Object System.Net.WebClient).DownloadFile($composerUrl, $installerPath)
 
-        # Cari path php.exe spesifik untuk dikaitkan ke Composer-Setup
+        # Cari path php.exe spesifik untuk dikaitkan ke Composer-Setup (Prioritaskan PHP 8.5)
         $phpForComposer = $null
-        $phpCmd = Get-Command "php.exe" -ErrorAction SilentlyContinue
-        if ($phpCmd) {
-            $phpForComposer = $phpCmd.Source
+        if (Test-Path -Path "C:\tools\php85\php.exe") {
+            $phpForComposer = "C:\tools\php85\php.exe"
         } else {
-            $phpFallbacks = @("C:\tools\php85\php.exe", "C:\php\php.exe", "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\PHP.PHP.8.5*\php.exe")
-            foreach ($pf in $phpFallbacks) {
-                $f = Resolve-Path -Path $pf -ErrorAction SilentlyContinue | Select-Object -First 1
-                if ($f -and (Test-Path -Path $f.Path)) {
-                    $phpForComposer = $f.Path
-                    break
+            $phpCmd = Get-Command "php.exe" -ErrorAction SilentlyContinue
+            if ($phpCmd) {
+                $phpForComposer = $phpCmd.Source
+            } else {
+                $phpFallbacks = @("C:\php\php.exe", "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\PHP.PHP.8.5*\php.exe")
+                foreach ($pf in $phpFallbacks) {
+                    $f = Resolve-Path -Path $pf -ErrorAction SilentlyContinue | Select-Object -First 1
+                    if ($f -and (Test-Path -Path $f.Path)) {
+                        $phpForComposer = $f.Path
+                        break
+                    }
                 }
             }
         }

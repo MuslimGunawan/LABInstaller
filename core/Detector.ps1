@@ -52,6 +52,30 @@ function Initialize-RegistryCache {
     return $global:RegistryAppCache
 }
 
+function Convert-ToVersionObject {
+    param ([string]$VersionString)
+    if ([string]::IsNullOrWhiteSpace($VersionString)) { return $null }
+
+    $clean = ($VersionString -replace '^[^\d]*', '')
+    $match = [regex]::Match($clean, '^\d+(\.\d+)*')
+    if (-not $match.Success) { return $null }
+
+    $parts = $match.Value -split '\.'
+    if ($parts.Count -eq 1) {
+        $clean = "$($parts[0]).0"
+    } elseif ($parts.Count -gt 4) {
+        $clean = ($parts[0..3] -join '.')
+    } else {
+        $clean = $match.Value
+    }
+
+    try {
+        return [version]$clean
+    } catch {
+        return $null
+    }
+}
+
 function Get-PackageStatus {
     param (
         [Parameter(Mandatory=$true)]
@@ -119,6 +143,19 @@ function Get-PackageStatus {
                 $fileVer = (Get-Item $targetPath -ErrorAction SilentlyContinue).VersionInfo.ProductVersion
                 $result.InstalledVersion = if ($fileVer) { $fileVer } else { "Terpasang" }
                 $result.TargetVersion = $result.InstalledVersion
+
+                # Validasi batas minimal versi (minVersion)
+                if ($Package.minVersion -and $fileVer) {
+                    $vInst = Convert-ToVersionObject -VersionString $fileVer
+                    $vReq  = Convert-ToVersionObject -VersionString $Package.minVersion
+                    if ($vInst -and $vReq -and ($vInst -lt $vReq)) {
+                        $result.TargetVersion = $Package.minVersion
+                        $result.Status = "UPDATE_AVAILABLE"
+                        $result.Details = "Versi berkas ($fileVer) lebih lama dari target lab ($($Package.minVersion)). Perlu upgrade."
+                        return $result
+                    }
+                }
+
                 $result.Status = "UP_TO_DATE"
                 $result.Details = "Terdeteksi pada berkas: $targetPath"
                 return $result
@@ -149,6 +186,19 @@ function Get-PackageStatus {
             if ($vOutput) {
                 $result.InstalledVersion = $vOutput
                 $result.TargetVersion = $result.InstalledVersion
+
+                # Validasi batas minimal versi (minVersion)
+                if ($Package.minVersion) {
+                    $vInst = Convert-ToVersionObject -VersionString $vOutput
+                    $vReq  = Convert-ToVersionObject -VersionString $Package.minVersion
+                    if ($vInst -and $vReq -and ($vInst -lt $vReq)) {
+                        $result.TargetVersion = $Package.minVersion
+                        $result.Status = "UPDATE_AVAILABLE"
+                        $result.Details = "Versi CLI aktif ($vOutput di $($foundCmd.Source)) lebih lama dari target lab ($($Package.minVersion)). Perlu upgrade."
+                        return $result
+                    }
+                }
+
                 $result.Status = "UP_TO_DATE"
                 $result.Details = "Terdeteksi via perintah CLI ($($foundCmd.Source))."
                 return $result
@@ -161,8 +211,21 @@ function Get-PackageStatus {
     
     $match = $global:RegistryAppCache | Where-Object { $_.DisplayName -match $pattern } | Select-Object -First 1
     if ($match) {
-        $result.InstalledVersion = $match.DisplayVersion
-        $result.TargetVersion = $match.DisplayVersion
+        $result.InstalledVersion = if ($match.DisplayVersion) { $match.DisplayVersion } else { "Terpasang" }
+        $result.TargetVersion = $result.InstalledVersion
+
+        # Validasi batas minimal versi (minVersion)
+        if ($Package.minVersion -and $match.DisplayVersion) {
+            $vInst = Convert-ToVersionObject -VersionString $match.DisplayVersion
+            $vReq  = Convert-ToVersionObject -VersionString $Package.minVersion
+            if ($vInst -and $vReq -and ($vInst -lt $vReq)) {
+                $result.TargetVersion = $Package.minVersion
+                $result.Status = "UPDATE_AVAILABLE"
+                $result.Details = "Versi di Registry ($($match.DisplayVersion)) lebih lama dari target lab ($($Package.minVersion)). Perlu upgrade."
+                return $result
+            }
+        }
+
         $result.Status = "UP_TO_DATE"
         $result.Details = "Terdaftar di Registry Windows: $($match.DisplayName)"
         return $result

@@ -8,6 +8,21 @@ function Start-SmartInstallation {
         [string]$ScriptRootDirectory
     )
 
+    # Deteksi apakah ada residu web stack lama (Laragon, XAMPP, PHP lama)
+    $hasLegacyStack = (Test-Path "C:\laragon") -or (Test-Path "C:\xampp") -or (Test-Path "C:\php")
+    if ($hasLegacyStack) {
+        Write-Host ""
+        Write-Host "==================================================================" -ForegroundColor Yellow
+        Write-Host " PERHATIAN: Ditemukan instalasi web stack lama di C:\ (Laragon/XAMPP/PHP)!" -ForegroundColor Yellow
+        Write-Host " File terkunci, service zombie, atau PATH lama dapat memicu konflik." -ForegroundColor DarkYellow
+        Write-Host "==================================================================" -ForegroundColor Yellow
+        Write-Host ""
+        $purgePrompt = Read-Host "Ingin jalankan CLEAN PURGE (Hapus Total & Reset Fresh) sekarang? (Y/N)"
+        if ($purgePrompt -match '^(y|ya|yes)$') {
+            Invoke-CleanPurgeLegacyLabStack
+        }
+    }
+
     Write-LogStep "MEMULAI ANALISIS SISTEM & PINDAI CEPAT STATUS SOFTWARE..."
     $manifestPackages = Load-AllManifestPackages -ManifestDir (Join-Path -Path $ScriptRootDirectory -ChildPath "manifests")
 

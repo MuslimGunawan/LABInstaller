@@ -1,7 +1,7 @@
 {
-  "version": "1.0.31",
+  "version": "1.0.32",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
-  "releaseDate": "2026-10-19",
-  "description": "v1.0.31: Perbaikan InvalidCastException di Detector.ps1 (.NET RegistryKey), eliminasi false skip Composer & Laravel saat PHP belum siap, perbaikan extension_dir PHP (bebas warning C:\\php\\ext), eliminasi duplicate module openssl, perbaikan Nginx Laragon (Use=0 & 00-default.conf valid), serta distribusi PHP 8.5 system-wide C:\\tools\\php85."
+  "releaseDate": "2026-10-20",
+  "description": "v1.0.32: Fitur Clean Reset & Fresh Purge (Menu 7) untuk pembersihan total residu Laragon, XAMPP, PHP usang (8.1/8.2), dan service Windows yang terkunci; deteksi minVersion cerdas untuk upgrade otomatis PHP 8.5; sanitasi PATH sistem; serta perlindungan cadangan otomatis proyek htdocs/www."
 }

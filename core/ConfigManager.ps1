@@ -134,6 +134,169 @@ function Resolve-Port80Conflict {
     }
 }
 
+function Invoke-CleanPurgeLegacyLabStack {
+    param (
+        [switch]$Force = $false,
+        [switch]$SkipBackup = $false
+    )
+
+    Write-Host ""
+    Write-Host "==================================================================" -ForegroundColor Yellow
+    Write-Host "   CLEAN PURGE & FRESH RESET: WEB SERVER, DATABASE & RUNTIME      " -ForegroundColor Yellow
+    Write-Host "==================================================================" -ForegroundColor Yellow
+    Write-Host " Prosedur ini akan membersihkan secara tuntas:" -ForegroundColor White
+    Write-Host " 1. Menghentikan semua proses zombie (Apache, MySQL, Nginx, PHP, Laragon, XAMPP)" -ForegroundColor Gray
+    Write-Host " 2. Menghapus Service Windows Apache & MySQL yang tersangkut / mengunci port" -ForegroundColor Gray
+    Write-Host " 3. Membersihkan residu instalasi lama di C:\xampp, C:\laragon, C:\tools\php*, C:\php" -ForegroundColor Gray
+    Write-Host " 4. Membersihkan PATH sistem dari entri PHP usang (8.1/8.2) & Composer rusak" -ForegroundColor Gray
+    Write-Host " 5. Melepaskan Port 80 & Port 3306 agar bebas bentrok untuk instalasi baru" -ForegroundColor Gray
+    Write-Host "==================================================================" -ForegroundColor Yellow
+    Write-Host ""
+
+    if (-not $Force) {
+        $confirm = Read-Host "Apakah Anda yakin ingin menjalankan CLEAN PURGE sekarang? (Y/N)"
+        if ($confirm -notmatch '^(y|ya|yes)$') {
+            Write-LogInfo "Proses Clean Purge dibatalkan oleh pengguna."
+            return $false
+        }
+    }
+
+    Write-LogStep "MEMULAI PROSES PEMBERSIHAN TOTAL (CLEAN PURGE & RESET)..."
+
+    # 1. Hentikan semua proses terkait web server & PHP
+    Write-LogInfo "1/6. Menghentikan seluruh proses aktif terkait Web Server & Database..."
+    $procs = @("httpd", "mysqld", "mariadbd", "nginx", "php", "php-cgi", "laragon", "xampp-control", "xampp_start")
+    foreach ($p in $procs) {
+        $foundProcs = Get-Process -Name $p -ErrorAction SilentlyContinue
+        if ($foundProcs) {
+            Write-LogInfo "Mematikan proses: $p ($($foundProcs.Count) instance)..."
+            $foundProcs | Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+    }
+    Start-Sleep -Seconds 1
+
+    # 2. Hentikan & Hapus Service Windows liar (Apache & MySQL)
+    Write-LogInfo "2/6. Menghentikan & menghapus Service Windows Apache & MySQL..."
+    $services = @("Apache2.4", "apache", "Apache", "mysql", "MySQL", "MySQL80", "MySQL8", "mysql8", "laragon", "xamppapache", "xamppmysql")
+    foreach ($svc in $services) {
+        $s = Get-Service -Name $svc -ErrorAction SilentlyContinue
+        if ($s) {
+            Write-LogInfo "Menghapus Windows Service: $svc..."
+            try { Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue } catch {}
+            Start-Process -FilePath "sc.exe" -ArgumentList "delete `"$svc`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+        }
+    }
+
+    # 3. Lepaskan Port 80 dari IIS / HTTP.sys / PID 4
+    Write-LogInfo "3/6. Membebaskan Port 80 dari lock Windows..."
+    if (Get-Command Resolve-Port80Conflict -ErrorAction SilentlyContinue) {
+        Resolve-Port80Conflict | Out-Null
+    }
+
+    # 4. Hapus folder instalasi lama (dengan opsi cadangkan htdocs/www jika ada proyek pengguna)
+    Write-LogInfo "4/6. Membersihkan direktori instalasi lama di disk C:..."
+    $dirsToClean = @(
+        @{ Path = "C:\laragon"; Name = "Laragon"; DataDir = "www" },
+        @{ Path = "C:\xampp";   Name = "XAMPP";   DataDir = "htdocs" },
+        @{ Path = "C:\tools\php85"; Name = "PHP 8.5 Standalone" },
+        @{ Path = "C:\php";     Name = "PHP Legacy" },
+        @{ Path = "C:\ProgramData\ComposerSetup"; Name = "Composer System Cache" }
+    )
+
+    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $backupRoot = "C:\LAB_BACKUP_$timestamp"
+
+    foreach ($d in $dirsToClean) {
+        if (Test-Path -Path $d.Path) {
+            # Cadangkan proyek pengguna jika bukan bawaan installer
+            if (-not $SkipBackup -and $d.DataDir) {
+                $userProjectDir = Join-Path -Path $d.Path -ChildPath $d.DataDir
+                if (Test-Path -Path $userProjectDir) {
+                    $hasProjects = Get-ChildItem -Path $userProjectDir -ErrorAction SilentlyContinue | Where-Object { $_.Name -notin @("index.php", "index.html", "dashboard", "webalizer", "xampp", "favicon.ico") }
+                    if ($hasProjects) {
+                        Write-LogInfo "Ditemukan file proyek pengguna di $userProjectDir. Menyimpan cadangan ke $backupRoot..."
+                        if (-not (Test-Path -Path $backupRoot)) { New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null }
+                        $destBackup = Join-Path -Path $backupRoot -ChildPath "$($d.Name)_$($d.DataDir)"
+                        Copy-Item -Path $userProjectDir -Destination $destBackup -Recurse -Force -ErrorAction SilentlyContinue
+                        Write-LogSuccess "Proyek dicadangkan ke: $destBackup"
+                    }
+                }
+            }
+
+            Write-LogInfo "Menghapus folder lama: $($d.Path)..."
+            try {
+                # Gunakan cmd rmdir /s /q untuk kecepatan tinggi & bypass lock PowerShell
+                Start-Process -FilePath "cmd.exe" -ArgumentList "/c rmdir /s /q `"$($d.Path)`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+                if (Test-Path -Path $d.Path) {
+                    Remove-Item -Path $d.Path -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
+                }
+                Write-LogSuccess "Folder $($d.Path) berhasil dibersihkan."
+            } catch {
+                Write-LogWarning "Gagal membersihkan sebagian file di $($d.Path): $_"
+            }
+        }
+    }
+
+    # Bersihkan cache global composer pengguna
+    $composerUserDir = Join-Path -Path $env:APPDATA -ChildPath "Composer"
+    if (Test-Path -Path $composerUserDir) {
+        Remove-Item -Path (Join-Path -Path $composerUserDir -ChildPath "vendor") -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
+        Remove-Item -Path (Join-Path -Path $composerUserDir -ChildPath "composer.lock") -Force -ErrorAction SilentlyContinue | Out-Null
+        Write-LogSuccess "Cache global Composer dibersihkan."
+    }
+
+    # 5. Sanitasi PATH Sistem (Buang semua entri PHP 8.1, 8.2, XAMPP, Laragon, Composer lama)
+    Write-LogInfo "5/6. Membersihkan variabel PATH sistem dari entri lama yang bentrok..."
+    $patternsToRemove = @(
+        '\\laragon\\bin\\php',
+        '\\xampp\\php',
+        '\\tools\\php',
+        '\\php$',
+        '\\php8\d',
+        'Microsoft\\WinGet\\Packages\\PHP\.PHP',
+        'ComposerSetup\\bin'
+    )
+
+    foreach ($scope in @([System.EnvironmentVariableTarget]::Machine, [System.EnvironmentVariableTarget]::User)) {
+        $rawPath = [System.Environment]::GetEnvironmentVariable("Path", $scope)
+        if (-not [string]::IsNullOrWhiteSpace($rawPath)) {
+            $parts = $rawPath -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+            $cleanParts = @()
+            foreach ($p in $parts) {
+                $shouldRemove = $false
+                foreach ($pat in $patternsToRemove) {
+                    if ($p -match $pat) {
+                        $shouldRemove = $true
+                        Write-LogInfo "Menghapus entri PATH usang ($scope): $p"
+                        break
+                    }
+                }
+                if (-not $shouldRemove) {
+                    $cleanParts += $p
+                }
+            }
+            $newPathStr = ($cleanParts -join ';')
+            [System.Environment]::SetEnvironmentVariable("Path", $newPathStr, $scope)
+        }
+    }
+
+    # Perbarui sesi saat ini
+    Refresh-CurrentSessionEnvironment
+    Broadcast-EnvironmentChange
+
+    # 6. Bersihkan Registry Cache LABInstaller
+    Write-LogInfo "6/6. Mereset cache detektor LABInstaller..."
+    if (Get-Command Initialize-RegistryCache -ErrorAction SilentlyContinue) {
+        Initialize-RegistryCache -ForceRefresh | Out-Null
+    }
+
+    Write-Host ""
+    Write-LogSuccess "BERSIH TOTAL: Semua residu PHP lama, Laragon, XAMPP, dan Service Windows berhasil di-PURGE!"
+    Write-LogSuccess "Sistem kini 100% FRESH dan siap dipasang paket baru yang bersih tanpa konflik!"
+    Write-Host ""
+    return $true
+}
+
 function Set-SystemDefaultBrowser {
     Write-LogStep "Mengonfigurasi Default Browser Sistem (Google Chrome / Edge) untuk Mengatasi Error IE 11..."
 
@@ -327,13 +490,17 @@ function Configure-WebServerPorts {
         if (Test-Path -Path $httpdConf) {
             $confText = Get-Content -Path $httpdConf -Raw
             # Ganti Listen 80 ke Listen 8080 jika masih 80
-            if ($confText -match 'Listen\s+80\r?\n') {
-                $confText = $confText -replace 'Listen\s+80', 'Listen 8080'
-                $confText = $confText -replace 'ServerName\s+localhost:80', 'ServerName localhost:8080'
+            if ($confText -match '(?m)^Listen\s+(?:.*:)?80\s*$') {
+                $confText = $confText -replace '(?m)^Listen\s+(?:.*:)?80\s*$', 'Listen 8080'
+                $confText = $confText -replace '(?m)^ServerName\s+localhost:80\s*$', 'ServerName localhost:8080'
                 [System.IO.File]::WriteAllText($httpdConf, $confText, [System.Text.Encoding]::ASCII)
                 Write-LogSuccess "XAMPP Apache HTTP Port disesuaikan ke: 8080 (Bebas Bentrok)."
+            } elseif ($confText -match '(?m)^Listen\s+(?:.*:)?8080\s*$') {
+                Write-LogInfo "XAMPP Apache HTTP Port sudah menggunakan port alternatif 8080."
             } else {
-                Write-LogInfo "XAMPP Apache HTTP Port sudah menggunakan port alternatif."
+                $confText = $confText -replace 'Listen\s+80\b', 'Listen 8080'
+                [System.IO.File]::WriteAllText($httpdConf, $confText, [System.Text.Encoding]::ASCII)
+                Write-LogSuccess "XAMPP Apache HTTP Port disesuaikan ke: 8080 (Bebas Bentrok)."
             }
         }
 
@@ -341,10 +508,10 @@ function Configure-WebServerPorts {
         $sslConf = Join-Path -Path $xamppDir -ChildPath "apache\conf\extra\httpd-ssl.conf"
         if (Test-Path -Path $sslConf) {
             $sslText = Get-Content -Path $sslConf -Raw
-            if ($sslText -match 'Listen\s+443\r?\n') {
-                $sslText = $sslText -replace 'Listen\s+443', 'Listen 4433'
-                $sslText = $sslText -replace '<VirtualHost _default_:443>', '<VirtualHost _default_:4433>'
-                $sslText = $sslText -replace 'ServerName\s+localhost:443', 'ServerName localhost:4433'
+            if ($sslText -match 'Listen\s+443\b') {
+                $sslText = $sslText -replace 'Listen\s+443\b', 'Listen 4433'
+                $sslText = $sslText -replace '<VirtualHost\s+_default_:443>', '<VirtualHost _default_:4433>'
+                $sslText = $sslText -replace 'ServerName\s+localhost:443\b', 'ServerName localhost:4433'
                 [System.IO.File]::WriteAllText($sslConf, $sslText, [System.Text.Encoding]::ASCII)
                 Write-LogSuccess "XAMPP Apache HTTPS (SSL) Port disesuaikan ke: 4433 (Bebas Bentrok)."
             }
