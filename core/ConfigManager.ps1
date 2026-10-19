@@ -468,51 +468,53 @@ function Configure-WebServerPorts {
                 $lIniText = $lIniText -replace '(\[apache\][^\[]*?Use\s*=\s*)0', '${1}-1'
             }
 
-            # Pastikan [nginx] Use=-1 (Tetap AKTIF!), Port=8081, SSLPort=8443 agar tidak bentrok dengan XAMPP Apache 8080
+            # Pastikan [nginx] Use=0 (Nonaktifkan auto-start bersamaan dengan Apache agar Laragon tidak crash/bentrok)
             if ($lIniText -match '\[nginx\]') {
-                $lIniText = $lIniText -replace '(\[nginx\][^\[]*?Use\s*=\s*)\d+', '${1}-1'
+                $lIniText = $lIniText -replace '(\[nginx\][^\[]*?Use\s*=\s*)-?\d+', '${1}0'
                 if ($lIniText -match '\[nginx\][^\[]*Port\s*=\s*\d+') {
                     $lIniText = $lIniText -replace '(\[nginx\][^\[]*?Port\s*=\s*)\d+', '${1}8081'
                 } else {
                     $lIniText = $lIniText -replace '(\[nginx\]\r?\n)', "`$1Port=8081`r`n"
                 }
-                if ($lIniText -match '\[nginx\][^\[]*SSLPort\s*=\s*\d+') {
-                    $lIniText = $lIniText -replace '(\[nginx\][^\[]*?SSLPort\s*=\s*)\d+', '${1}8443'
-                } else {
-                    $lIniText = $lIniText -replace '(\[nginx\]\r?\n)', "`$1SSLPort=8443`r`n"
-                }
             } else {
-                $lIniText += "`r`n[nginx]`r`nUse=-1`r`nPort=8081`r`nSSLPort=8443`r`n"
+                $lIniText += "`r`n[nginx]`r`nUse=0`r`nPort=8081`r`nSSLPort=8443`r`n"
             }
 
             $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
             [System.IO.File]::WriteAllText($laragonIni, $lIniText, $utf8NoBom)
-            Write-LogSuccess "Laragon diselaraskan: Apache Port 80 & Nginx TETAP AKTIF di Port 8081 (Bebas Bentrok 100%)!"
+            Write-LogSuccess "Laragon diselaraskan: Apache Port 80 Utama & Nginx Port 8081 (Siaga Bebas Bentrok)!"
         }
 
-        # 2. Sinkronkan semua Nginx site configuration ke Port 8081 dengan STRICT UTF-8 Non-BOM
-        # (PowerShell Set-Content default menambahkan BOM \xEF\xBB\xBF yang menyebabkan Nginx crash pada 'unknown directive server')
+        # 2. Selaraskan konfigurasi Nginx 00-default.conf dengan format sintaks valid & STRICT UTF-8 Non-BOM
         $nginxSitesDir = Join-Path -Path $laragonDir -ChildPath "etc\nginx\sites-enabled"
-        if (Test-Path -Path $nginxSitesDir) {
-            $confFiles = Get-ChildItem -Path $nginxSitesDir -Filter "*.conf" -ErrorAction SilentlyContinue
+        if (-not (Test-Path -Path $nginxSitesDir)) {
+            New-Item -ItemType Directory -Path $nginxSitesDir -Force -ErrorAction SilentlyContinue | Out-Null
+        }
+        $defaultNginxConf = Join-Path -Path $nginxSitesDir -ChildPath "00-default.conf"
+        $cleanNginxTemplate = @"
+server {
+    listen 8081 default_server;
+    listen 8443 ssl default_server;
+    server_name localhost;
+    root "C:/laragon/www/";
+    index index.html index.htm index.php;
+
+    location / {
+        try_files `$uri `$uri/ =404;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass 127.0.0.1:9000;
+    }
+}
+"@
+        try {
             $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-            foreach ($conf in $confFiles) {
-                try {
-                    $bytes = [System.IO.File]::ReadAllBytes($conf.FullName)
-                    $text = [System.Text.Encoding]::UTF8.GetString($bytes)
-                    # Hapus BOM jika ada
-                    if ($text.StartsWith([char]0xFEFF)) {
-                        $text = $text.Substring(1)
-                    }
-                    # Ganti listen 8080 atau 80 ke 8081
-                    $text = $text -replace 'listen\s+8080\b', 'listen 8081'
-                    $text = $text -replace 'listen\s+80\b', 'listen 8081'
-                    [System.IO.File]::WriteAllText($conf.FullName, $text, $utf8NoBom)
-                } catch {
-                    Write-LogWarning "Gagal memperbarui konfigurasi Nginx $($conf.Name): $_"
-                }
-            }
-            Write-LogSuccess "Konfigurasi Nginx sites-enabled diselaraskan ke Port 8081 (Strict UTF-8 Non-BOM)."
+            [System.IO.File]::WriteAllText($defaultNginxConf, $cleanNginxTemplate, $utf8NoBom)
+            Write-LogSuccess "Konfigurasi Nginx sites-enabled (00-default.conf) diselaraskan (Port 8081, Bebas Error Syntax)."
+        } catch {
+            Write-LogWarning "Gagal memperbarui konfigurasi Nginx 00-default.conf: $_"
         }
 
         # 3. Optimasi phpMyAdmin Laragon (Auto-Login Root tanpa password & Bebas Warning)
@@ -568,29 +570,35 @@ function Configure-WebServerPorts {
 }
 
 function Configure-AllPhpExtensions {
-    Write-LogStep "Mengonfigurasi php.ini & Mengaktifkan Ekstensi Wajib Laravel..."
+    Write-LogStep "Mengonfigurasi php.ini, extension_dir & Mengaktifkan Ekstensi Wajib Laravel..."
 
-    # Temukan semua file php.ini di sistem
+    # Temukan semua file php.ini di sistem (C:\tools\php85, Laragon, XAMPP, WinGet, PATH)
     $targetIniFiles = @()
 
-    # 1. PHP 8.5 Winget / System
+    $candidateRoots = @(
+        "C:\tools\php85",
+        "C:\php",
+        "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\PHP.PHP.8.5*",
+        "C:\laragon\bin\php\*",
+        "C:\xampp\php"
+    )
+
+    foreach ($cr in $candidateRoots) {
+        $matched = Resolve-Path -Path $cr -ErrorAction SilentlyContinue
+        foreach ($m in $matched) {
+            $pIni = Join-Path -Path $m.Path -ChildPath "php.ini"
+            if (Test-Path -Path $pIni) {
+                $targetIniFiles += $pIni
+            }
+        }
+    }
+
     $phpCmd = Get-Command "php.exe" -ErrorAction SilentlyContinue
     if ($phpCmd) {
         $pDir = Split-Path -Parent $phpCmd.Source
         $pIni = Join-Path -Path $pDir -ChildPath "php.ini"
         if (Test-Path -Path $pIni) { $targetIniFiles += $pIni }
     }
-
-    # 2. Laragon PHP
-    $laragonPhpRoot = "C:\laragon\bin\php"
-    if (Test-Path -Path $laragonPhpRoot) {
-        $lInis = Get-ChildItem -Path $laragonPhpRoot -Recurse -Filter "php.ini" -ErrorAction SilentlyContinue
-        foreach ($li in $lInis) { $targetIniFiles += $li.FullName }
-    }
-
-    # 3. XAMPP PHP
-    $xamppIni = "C:\xampp\php\php.ini"
-    if (Test-Path -Path $xamppIni) { $targetIniFiles += $xamppIni }
 
     $uniqueInis = $targetIniFiles | Select-Object -Unique
 
@@ -616,25 +624,50 @@ function Configure-AllPhpExtensions {
         "sodium"
     )
 
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+
     foreach ($iniPath in $uniqueInis) {
         Write-LogInfo "Mengoptimalkan: $iniPath"
         try {
             $content = Get-Content -Path $iniPath -Raw -Encoding UTF8
+            $iniDir = Split-Path -Parent $iniPath
+            $extDir = Join-Path -Path $iniDir -ChildPath "ext"
 
-            # Aktifkan setiap ekstensi wajib
+            # 1. Bersihkan baris extension_dir lama agar tidak salah fallback ke C:\php\ext
+            $content = $content -replace '(?m)^;?\s*extension_dir\s*=.*`r?`n?', ''
+
+            # 2. Bersihkan semua deklarasi ekstensi wajib yang lama (mencegah duplicate warning openssl/module already loaded)
             foreach ($ext in $requiredExtensions) {
-                $content = $content -replace ";extension=$ext", "extension=$ext"
-                $content = $content -replace ";extension\s*=\s*php_$ext\.dll", "extension=php_$ext.dll"
+                $content = $content -replace "(?m)^extension\s*=\s*(php_)?$ext(\.dll)?\s*`r?`n?", ""
+                $content = $content -replace "(?m)^;extension\s*=\s*(php_)?$ext(\.dll)?\s*`r?`n?", ""
             }
 
-            # Optimasi Batas Memori & Upload untuk Proyek Laravel Modern
+            # 3. Bentuk blok ekstensi tunggal dan direktori ekstensi yang valid
+            $extDirLines = ""
+            if (Test-Path -Path $extDir) {
+                $normExt = $extDir.Replace('\', '/')
+                $extDirLines = "extension_dir = `"$normExt`"`r`nextension_dir = `"ext`"`r`n"
+            } else {
+                $extDirLines = "extension_dir = `"ext`"`r`n"
+            }
+
+            $extBlock = ($requiredExtensions | ForEach-Object { "extension=$_" }) -join "`r`n"
+            $injectionBlock = "$extDirLines$extBlock`r`n"
+
+            if ($content -match '(?m)^\[PHP\]\s*`r?`n') {
+                $content = $content -replace '(?m)^\[PHP\]\s*`r?`n', "[PHP]`r`n$injectionBlock"
+            } else {
+                $content = "[PHP]`r`n$injectionBlock" + $content
+            }
+
+            # 4. Optimasi Batas Memori & Upload untuk Proyek Laravel Modern
             $content = $content -replace 'memory_limit\s*=\s*\d+M', 'memory_limit = 512M'
             $content = $content -replace 'upload_max_filesize\s*=\s*\d+M', 'upload_max_filesize = 64M'
             $content = $content -replace 'post_max_size\s*=\s*\d+M', 'post_max_size = 64M'
             $content = $content -replace 'max_execution_time\s*=\s*\d+', 'max_execution_time = 300'
 
-            Set-Content -Path $iniPath -Value $content -Encoding UTF8
-            Write-LogSuccess "Berhasil mengaktifkan $($requiredExtensions.Count) ekstensi di: $iniPath"
+            [System.IO.File]::WriteAllText($iniPath, $content, $utf8NoBom)
+            Write-LogSuccess "Berhasil mengonfigurasi extension_dir & $($requiredExtensions.Count) ekstensi (bebas warning) di: $iniPath"
         }
         catch {
             Write-LogError "Gagal memperbarui $iniPath - $_"

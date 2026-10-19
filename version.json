@@ -1,7 +1,7 @@
 {
-  "version": "1.0.30",
+  "version": "1.0.31",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
-  "releaseDate": "2026-10-14",
-  "description": "v1.0.30: Penambahan paket Microsoft 365 (Office C2R online installer & auto Ohook permanent activation), integrasi Lab Keep-Alive Guard (Triple-Guard anti-sleep & anti-idle shutdown 10 menit), ikon desktop Office, serta perbaikan estetika warna konsol aktivasi."
+  "releaseDate": "2026-10-19",
+  "description": "v1.0.31: Perbaikan InvalidCastException di Detector.ps1 (.NET RegistryKey), eliminasi false skip Composer & Laravel saat PHP belum siap, perbaikan extension_dir PHP (bebas warning C:\\php\\ext), eliminasi duplicate module openssl, perbaikan Nginx Laragon (Use=0 & 00-default.conf valid), serta distribusi PHP 8.5 system-wide C:\\tools\\php85."
 }

@@ -14,22 +14,39 @@ function Initialize-RegistryCache {
 
     $global:RegistryAppCache = @()
 
-    $uninstallKeys = @(
-        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
-        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
+    $regTargets = @(
+        @{ Hive = [Microsoft.Win32.RegistryHive]::LocalMachine; Path = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"; View = [Microsoft.Win32.RegistryView]::Registry64 },
+        @{ Hive = [Microsoft.Win32.RegistryHive]::LocalMachine; Path = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"; View = [Microsoft.Win32.RegistryView]::Registry32 },
+        @{ Hive = [Microsoft.Win32.RegistryHive]::CurrentUser;  Path = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"; View = [Microsoft.Win32.RegistryView]::Default }
     )
 
-    foreach ($key in $uninstallKeys) {
-        Get-ItemProperty $key -ErrorAction SilentlyContinue | ForEach-Object {
-            if ($_.DisplayName) {
-                $global:RegistryAppCache += [PSCustomObject]@{
-                    DisplayName     = $_.DisplayName.Trim()
-                    DisplayVersion  = if ($_.DisplayVersion) { $_.DisplayVersion.Trim() } else { "Terpasang" }
-                    InstallLocation = if ($_.InstallLocation) { $_.InstallLocation.Trim() } else { "" }
+    foreach ($target in $regTargets) {
+        try {
+            $baseKey = [Microsoft.Win32.RegistryKey]::OpenBaseKey($target.Hive, $target.View)
+            $subKey = $baseKey.OpenSubKey($target.Path)
+            if ($subKey) {
+                foreach ($subName in $subKey.GetSubKeyNames()) {
+                    try {
+                        $appKey = $subKey.OpenSubKey($subName)
+                        if ($appKey) {
+                            $dispName = $appKey.GetValue("DisplayName")
+                            if ($dispName -and -not [string]::IsNullOrWhiteSpace($dispName.ToString())) {
+                                $dispVer = $appKey.GetValue("DisplayVersion")
+                                $instLoc = $appKey.GetValue("InstallLocation")
+                                $global:RegistryAppCache += [PSCustomObject]@{
+                                    DisplayName     = $dispName.ToString().Trim()
+                                    DisplayVersion  = if ($dispVer) { $dispVer.ToString().Trim() } else { "Terpasang" }
+                                    InstallLocation = if ($instLoc) { $instLoc.ToString().Trim() } else { "" }
+                                }
+                            }
+                            $appKey.Close()
+                        }
+                    } catch {}
                 }
+                $subKey.Close()
             }
-        }
+            $baseKey.Close()
+        } catch {}
     }
 
     return $global:RegistryAppCache
@@ -60,23 +77,52 @@ function Get-PackageStatus {
         RawPackage       = $Package
     }
 
+    # Pengecekan Khusus Dependensi: Composer & Laravel Installer wajib memiliki PHP aktif yang berfungsi
+    if ($Package.id -in @("Custom.Composer", "Custom.LaravelInstaller")) {
+        $phpCmd = Get-Command "php.exe" -ErrorAction SilentlyContinue
+        if (-not $phpCmd) {
+            $fallbackPhp = @(
+                "C:\tools\php85\php.exe",
+                "C:\laragon\bin\php\*\php.exe",
+                "C:\xampp\php\php.exe",
+                "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\PHP.PHP.8.5*\php.exe"
+            )
+            foreach ($cand in $fallbackPhp) {
+                $f = Resolve-Path -Path $cand -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($f -and (Test-Path -Path $f.Path)) {
+                    $phpCmd = [PSCustomObject]@{ Source = $f.Path }
+                    break
+                }
+            }
+        }
+        if (-not $phpCmd) {
+            $result.Status = "NOT_INSTALLED"
+            $result.Details = "Memerlukan runtime PHP aktif (PHP 8.5) yang belum terpasang."
+            return $result
+        }
+    }
+
     # 1. Jalur Pemeriksaan 1: Path Spesifik Disk (pathCheck)
     if (-not [string]::IsNullOrWhiteSpace($Package.pathCheck)) {
-        $resolvedPaths = @()
-        if ($Package.pathCheck -match '\*') {
-            $resolvedPaths = Get-Item -Path $Package.pathCheck -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
-        } elseif (Test-Path -Path $Package.pathCheck) {
-            $resolvedPaths = @($Package.pathCheck)
-        }
+        # Abaikan pathCheck untuk batch/script tool jika harus divalidasi lewat verifyCommand
+        $isScriptOnly = ($Package.pathCheck -match '\.(bat|cmd|ps1)$') -and (-not [string]::IsNullOrWhiteSpace($Package.verifyCommand))
+        if (-not $isScriptOnly) {
+            $resolvedPaths = @()
+            if ($Package.pathCheck -match '\*') {
+                $resolvedPaths = Get-Item -Path $Package.pathCheck -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+            } elseif (Test-Path -Path $Package.pathCheck) {
+                $resolvedPaths = @($Package.pathCheck)
+            }
 
-        if ($resolvedPaths.Count -gt 0) {
-            $targetPath = $resolvedPaths[0]
-            $fileVer = (Get-Item $targetPath -ErrorAction SilentlyContinue).VersionInfo.ProductVersion
-            $result.InstalledVersion = if ($fileVer) { $fileVer } else { "Terpasang" }
-            $result.TargetVersion = $result.InstalledVersion
-            $result.Status = "UP_TO_DATE"
-            $result.Details = "Terdeteksi pada berkas: $targetPath"
-            return $result
+            if ($resolvedPaths.Count -gt 0) {
+                $targetPath = $resolvedPaths[0]
+                $fileVer = (Get-Item $targetPath -ErrorAction SilentlyContinue).VersionInfo.ProductVersion
+                $result.InstalledVersion = if ($fileVer) { $fileVer } else { "Terpasang" }
+                $result.TargetVersion = $result.InstalledVersion
+                $result.Status = "UP_TO_DATE"
+                $result.Details = "Terdeteksi pada berkas: $targetPath"
+                return $result
+            }
         }
     }
 
@@ -100,7 +146,7 @@ function Get-PackageStatus {
 
         if ($foundCmd) {
             $vOutput = Get-CommandVersionOutput -CommandPath $foundCmd.Source -VerifyArgs $Package.verifyArgs
-            if ($vOutput -and $vOutput -notmatch "Python was not found" -and $vOutput -notmatch "Microsoft Store") {
+            if ($vOutput) {
                 $result.InstalledVersion = $vOutput
                 $result.TargetVersion = $result.InstalledVersion
                 $result.Status = "UP_TO_DATE"
@@ -188,27 +234,57 @@ function Get-CommandVersionOutput {
         $p.Start() | Out-Null
         $stdout = $p.StandardOutput.ReadToEnd()
         $stderr = $p.StandardError.ReadToEnd()
-        [void]$p.WaitForExit(2000)
-
-        $output = if (-not [string]::IsNullOrWhiteSpace($stdout)) { $stdout } else { $stderr }
-
-        # Filter out WindowsApps stub redirect message
-        if ($output -match "Python was not found" -or $output -match "Microsoft Store") {
+        $exited = $p.WaitForExit(3000)
+        if (-not $exited) {
+            try { $p.Kill() } catch {}
             return $null
         }
 
-        $firstLine = ($output -split '\r?\n' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
+        # Jika kode keluar non-zero, perintah gagal dieksekusi secara normal
+        if ($p.ExitCode -ne 0) {
+            return $null
+        }
 
-        if ($firstLine) {
-            if ($firstLine -match '(\d+\.\d+(\.\d+)?)') {
+        $combined = ($stdout + "`n" + $stderr)
+
+        # Tolak pesan error sistem Windows / CLI
+        $errorPhrases = @(
+            "is not recognized",
+            "not recognized",
+            "tidak dikenal",
+            "cannot find",
+            "tidak dapat menemukan",
+            "python was not found",
+            "microsoft store",
+            "the specified module could not be found",
+            "fatal error",
+            "uncaught exception",
+            "syntax error"
+        )
+        foreach ($ep in $errorPhrases) {
+            if ($combined -match [regex]::Escape($ep)) {
+                return $null
+            }
+        }
+
+        # Ekstrak nomor versi dari baris-baris output
+        $allLines = ($stdout -split '\r?\n') + ($stderr -split '\r?\n') | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        foreach ($line in $allLines) {
+            if ($line -match 'v?(\d+\.\d+(\.\d+)?)') {
                 return $matches[1]
             }
-            return $firstLine.Trim()
         }
-        return "Terdeteksi"
+
+        # Jika bersih tanpa error tapi tidak memiliki format versi standar
+        $firstClean = $allLines | Select-Object -First 1
+        if ($firstClean -and $firstClean.Length -lt 40) {
+            return $firstClean.Trim()
+        }
+
+        return $null
     }
     catch {
-        return "Terdeteksi"
+        return $null
     }
 }
 

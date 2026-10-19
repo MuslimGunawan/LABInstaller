@@ -170,23 +170,36 @@ function Setup-PhpEnvironment {
     Write-LogStep "Mengonfigurasi environment PHP 8.5 & php.ini..."
     Refresh-CurrentSessionEnvironment
 
-    $phpCmd = Get-Command "php.exe" -ErrorAction SilentlyContinue
+    $phpCandidates = @(
+        "C:\tools\php85\php.exe",
+        "C:\php\php.exe",
+        "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\PHP.PHP.8.5*\php.exe",
+        "C:\laragon\bin\php\*\php.exe",
+        "C:\xampp\php\php.exe"
+    )
+
     $phpDir = $null
+    $phpCmd = Get-Command "php.exe" -ErrorAction SilentlyContinue
 
     if ($phpCmd) {
         $phpDir = Split-Path -Parent $phpCmd.Source
     } else {
-        $wingetPackagesRoot = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages"
-        if (Test-Path -Path $wingetPackagesRoot) {
-            $phpCandidate = Get-ChildItem -Path $wingetPackagesRoot -Recurse -Filter "php.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($phpCandidate) {
-                $phpDir = Split-Path -Parent $phpCandidate.FullName
-                Add-DirectoryToPath -PathToAdd $phpDir -Scope "Machine" | Out-Null
+        foreach ($cand in $phpCandidates) {
+            $matched = Resolve-Path -Path $cand -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($matched -and (Test-Path -Path $matched.Path)) {
+                $phpDir = Split-Path -Parent $matched.Path
+                break
             }
         }
     }
 
     if ($phpDir) {
+        Add-DirectoryToPath -PathToAdd $phpDir -Scope "Machine" | Out-Null
+        # Prioritaskan di awal sesi aktif
+        if ($env:Path -split ';' -notcontains $phpDir) {
+            $env:Path = "$phpDir;$env:Path"
+        }
+
         $iniPath = Join-Path -Path $phpDir -ChildPath "php.ini"
         $iniDevPath = Join-Path -Path $phpDir -ChildPath "php.ini-development"
         $iniProdPath = Join-Path -Path $phpDir -ChildPath "php.ini-production"
@@ -200,9 +213,15 @@ function Setup-PhpEnvironment {
         }
     }
 
-    # Jalankan konfigurasi ekstensi lengkap
+    # Jalankan konfigurasi ekstensi lengkap (extension_dir & deduplikasi modul)
     if (Get-Command Configure-AllPhpExtensions -ErrorAction SilentlyContinue) {
         Configure-AllPhpExtensions
+    }
+
+    Refresh-CurrentSessionEnvironment
+    $verifyPhp = Get-Command "php.exe" -ErrorAction SilentlyContinue
+    if ($verifyPhp) {
+        Write-LogSuccess "PHP aktif dan terdaftar di sistem: $($verifyPhp.Source)"
     }
 }
 
@@ -219,14 +238,37 @@ function Install-ComposerOfficial {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         (New-Object System.Net.WebClient).DownloadFile($composerUrl, $installerPath)
 
-        Write-LogInfo "Menjalankan Composer-Setup.exe secara silent..."
-        $process = Start-Process -FilePath $installerPath -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS" -NoNewWindow -Wait -PassThru
+        # Cari path php.exe spesifik untuk dikaitkan ke Composer-Setup
+        $phpForComposer = $null
+        $phpCmd = Get-Command "php.exe" -ErrorAction SilentlyContinue
+        if ($phpCmd) {
+            $phpForComposer = $phpCmd.Source
+        } else {
+            $phpFallbacks = @("C:\tools\php85\php.exe", "C:\php\php.exe", "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\PHP.PHP.8.5*\php.exe")
+            foreach ($pf in $phpFallbacks) {
+                $f = Resolve-Path -Path $pf -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($f -and (Test-Path -Path $f.Path)) {
+                    $phpForComposer = $f.Path
+                    break
+                }
+            }
+        }
 
-        if ($process.ExitCode -eq 0) {
+        $argList = "/VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS"
+        if ($phpForComposer) {
+            $argList += " /PHP=`"$phpForComposer`""
+            Write-LogInfo "Mengaitkan Composer dengan runtime PHP: $phpForComposer"
+        }
+
+        Write-LogInfo "Menjalankan Composer-Setup.exe secara silent..."
+        $process = Start-Process -FilePath $installerPath -ArgumentList $argList -NoNewWindow -Wait -PassThru
+
+        if ($process.ExitCode -eq 0 -or (Test-Path -Path "C:\ProgramData\ComposerSetup\bin\composer.bat")) {
             Write-LogSuccess "Composer berhasil diinstal secara resmi."
             $composerBin = "C:\ProgramData\ComposerSetup\bin"
             if (Test-Path -Path $composerBin) {
                 Add-DirectoryToPath -PathToAdd $composerBin -Scope "Machine" | Out-Null
+                $env:Path = "$composerBin;$env:Path"
             }
             Refresh-CurrentSessionEnvironment
             return $true
@@ -251,18 +293,28 @@ function Install-LaravelInstallerOfficial {
     Refresh-CurrentSessionEnvironment
 
     $composerCmd = Get-Command "composer" -ErrorAction SilentlyContinue
+    $composerBin = "composer"
     if (-not $composerCmd) {
-        Write-LogError "Composer belum terdeteksi. Silakan instal Composer terlebih dahulu."
-        return $false
+        $fallbackComposer = "C:\ProgramData\ComposerSetup\bin\composer.bat"
+        if (Test-Path -Path $fallbackComposer) {
+            $composerBin = $fallbackComposer
+        } else {
+            Write-LogError "Composer belum terdeteksi. Silakan instal Composer terlebih dahulu."
+            return $false
+        }
+    } else {
+        $composerBin = $composerCmd.Source
     }
 
     try {
-        Write-LogInfo "Menjalankan: composer global require laravel/installer"
-        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c composer global require laravel/installer" -NoNewWindow -Wait -PassThru
+        Write-LogInfo "Menjalankan: $composerBin global require laravel/installer"
+        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$composerBin`" global require laravel/installer" -NoNewWindow -Wait -PassThru
 
         $composerGlobalBin = Join-Path -Path $env:APPDATA -ChildPath "Composer\vendor\bin"
         if (Test-Path -Path $composerGlobalBin) {
+            Add-DirectoryToPath -PathToAdd $composerGlobalBin -Scope "Machine" | Out-Null
             Add-DirectoryToPath -PathToAdd $composerGlobalBin -Scope "User" | Out-Null
+            $env:Path = "$composerGlobalBin;$env:Path"
         }
 
         Refresh-CurrentSessionEnvironment

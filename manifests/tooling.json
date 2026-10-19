@@ -18,7 +18,6 @@
     "priority": 9,
     "verifyCommand": "composer",
     "verifyArgs": ["--version"],
-    "pathCheck": "C:\\ProgramData\\ComposerSetup\\bin\\composer.bat",
     "customHandler": "Install-ComposerOfficial",
     "description": "Manajer dependensi resmi untuk ekosistem PHP dan framework Laravel."
   },
