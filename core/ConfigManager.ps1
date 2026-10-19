@@ -134,6 +134,273 @@ function Resolve-Port80Conflict {
     }
 }
 
+function Find-LegacyLabStackLocations {
+    param(
+        [switch]$Silent = $false
+    )
+
+    if (-not $Silent) {
+        Write-LogStep "MELACAK SELURUH LOKASI INSTALASI & SERVICE LAMA SECARA DINAMIS..."
+    }
+
+    $report = [PSCustomObject]@{
+        Services         = @()
+        Processes        = @()
+        DiscoveredPaths  = @()
+        PathPollutions   = @()
+        ComposerResidues = @()
+        PortConflicts    = @()
+    }
+
+    $discoveredDirs = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+    # 1. Deteksi Proses Zombie & Executable Path
+    $targetProcNames = @("httpd", "mysqld", "mariadbd", "nginx", "php", "php-cgi", "laragon", "xampp-control", "xampp_start")
+    foreach ($pName in $targetProcNames) {
+        $procs = Get-Process -Name $pName -ErrorAction SilentlyContinue
+        foreach ($p in $procs) {
+            $exePath = ""
+            try { $exePath = $p.Path } catch {}
+            if (-not $exePath) {
+                try {
+                    $cimP = Get-CimInstance Win32_Process -Filter "ProcessId = $($p.Id)" -ErrorAction SilentlyContinue
+                    $exePath = $cimP.ExecutablePath
+                } catch {}
+            }
+            $report.Processes += [PSCustomObject]@{
+                Id   = $p.Id
+                Name = $p.Name
+                Path = $exePath
+            }
+            if ($exePath -and (Test-Path -Path $exePath)) {
+                $dir = Split-Path -Parent $exePath
+                if ($dir -match '(?i)\\(bin|php|apache|mysql|mariadb)$') { $dir = Split-Path -Parent $dir }
+                if ($dir -match '(?i)\\(bin|php|apache|mysql|mariadb)$') { $dir = Split-Path -Parent $dir }
+                [void]$discoveredDirs.Add($dir)
+            }
+        }
+    }
+
+    # 2. Deteksi Windows Services & ImagePath Binary
+    try {
+        $allServices = Get-CimInstance Win32_Service -ErrorAction SilentlyContinue
+        foreach ($svc in $allServices) {
+            $isMatch = ($svc.Name -match '(?i)apache|httpd|mysql|mariadb|nginx|laragon|xampp|php') -or
+                       ($svc.DisplayName -match '(?i)apache|httpd|mysql|mariadb|nginx|laragon|xampp|php') -or
+                       ($svc.PathName -match '(?i)httpd\.exe|mysqld\.exe|mariadbd\.exe|nginx\.exe|php-cgi\.exe|laragon\.exe|xampp')
+
+            if ($isMatch) {
+                $report.Services += [PSCustomObject]@{
+                    Name        = $svc.Name
+                    DisplayName = $svc.DisplayName
+                    State       = $svc.State
+                    PathName    = $svc.PathName
+                }
+
+                if ($svc.PathName) {
+                    $rawP = $svc.PathName.Trim()
+                    if ($rawP -match '^"([^"]+)"') {
+                        $rawP = $matches[1]
+                    } elseif ($rawP -match '^([^\s]+)') {
+                        $rawP = $matches[1]
+                    }
+                    if (Test-Path -Path $rawP) {
+                        $dir = Split-Path -Parent $rawP
+                        if ($dir -match '(?i)\\(bin|php|apache|mysql|mariadb)$') { $dir = Split-Path -Parent $dir }
+                        if ($dir -match '(?i)\\(bin|php|apache|mysql|mariadb)$') { $dir = Split-Path -Parent $dir }
+                        [void]$discoveredDirs.Add($dir)
+                    }
+                }
+            }
+        }
+    } catch {}
+
+    # 3. Deteksi Perintah CLI di PATH Sistem (Get-Command -All)
+    $cmdsToInspect = @("php", "composer", "laravel", "httpd", "mysqld", "mariadbd", "nginx")
+    foreach ($cmdName in $cmdsToInspect) {
+        $foundCmds = Get-Command $cmdName -All -ErrorAction SilentlyContinue
+        foreach ($fc in $foundCmds) {
+            if ($fc.Source) {
+                $cmdPath = $fc.Source
+                $cmdDir = Split-Path -Parent $cmdPath
+                [void]$discoveredDirs.Add($cmdDir)
+                if ($cmdDir -match '(?i)\\(bin|php|apache|mysql)$') {
+                    [void]$discoveredDirs.Add((Split-Path -Parent $cmdDir))
+                }
+            }
+        }
+    }
+
+    # 4. Deteksi Registry Uninstall Database (64-bit, 32-bit, CurrentUser)
+    $regPaths = @(
+        @{ Hive = [Microsoft.Win32.RegistryHive]::LocalMachine; Path = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"; View = [Microsoft.Win32.RegistryView]::Registry64 },
+        @{ Hive = [Microsoft.Win32.RegistryHive]::LocalMachine; Path = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"; View = [Microsoft.Win32.RegistryView]::Registry32 },
+        @{ Hive = [Microsoft.Win32.RegistryHive]::CurrentUser;  Path = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"; View = [Microsoft.Win32.RegistryView]::Default }
+    )
+    foreach ($rp in $regPaths) {
+        try {
+            $baseKey = [Microsoft.Win32.RegistryKey]::OpenBaseKey($rp.Hive, $rp.View)
+            $subKey = $baseKey.OpenSubKey($rp.Path)
+            if ($subKey) {
+                foreach ($subName in $subKey.GetSubKeyNames()) {
+                    try {
+                        $appKey = $subKey.OpenSubKey($subName)
+                        if ($appKey) {
+                            $dispName = $appKey.GetValue("DisplayName")
+                            $instLoc  = $appKey.GetValue("InstallLocation")
+                            $uninstStr = $appKey.GetValue("UninstallString")
+
+                            if ($dispName -and ($dispName -match '(?i)Laragon|XAMPP|PHP|Composer|Apache|MySQL|MariaDB')) {
+                                if ($instLoc -and (Test-Path -Path $instLoc)) {
+                                    [void]$discoveredDirs.Add($instLoc.ToString().Trim())
+                                }
+                                if ($uninstStr) {
+                                    $uRaw = $uninstStr.ToString().Trim()
+                                    if ($uRaw -match '^"([^"]+)"') { $uRaw = $matches[1] }
+                                    elseif ($uRaw -match '^([^\s]+)') { $uRaw = $matches[1] }
+                                    if (Test-Path -Path $uRaw) {
+                                        [void]$discoveredDirs.Add((Split-Path -Parent $uRaw))
+                                    }
+                                }
+                            }
+                            $appKey.Close()
+                        }
+                    } catch {}
+                }
+                $subKey.Close()
+            }
+            $baseKey.Close()
+        } catch {}
+    }
+
+    # 5. Pindai Partisi Drive Fisik/Lokal (C:, D:, E:, dll.)
+    try {
+        $drives = Get-CimInstance Win32_LogicalDisk -Filter "DriveType = 3" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty DeviceID
+        foreach ($drv in $drives) {
+            $candidates = @(
+                "$drv\xampp",
+                "$drv\laragon",
+                "$drv\tools\php85",
+                "$drv\tools\php",
+                "$drv\php",
+                "$drv\php8*",
+                "$drv\php7*",
+                "$drv\server*",
+                "$drv\webserver*",
+                "$drv\ProgramData\ComposerSetup"
+            )
+            foreach ($cand in $candidates) {
+                if ($cand -match '\*') {
+                    $matchesFound = Get-Item -Path $cand -ErrorAction SilentlyContinue
+                    foreach ($mf in $matchesFound) {
+                        if ($mf.PSIsContainer) { [void]$discoveredDirs.Add($mf.FullName) }
+                    }
+                } elseif (Test-Path -Path $cand) {
+                    [void]$discoveredDirs.Add($cand)
+                }
+            }
+        }
+    } catch {}
+
+    # 6. Residu Composer & User Profile
+    $userResidues = @(
+        (Join-Path -Path $env:APPDATA -ChildPath "Composer"),
+        (Join-Path -Path $env:LOCALAPPDATA -ChildPath "Composer"),
+        (Join-Path -Path $env:USERPROFILE -ChildPath ".composer"),
+        "C:\ProgramData\ComposerSetup"
+    )
+    foreach ($ur in $userResidues) {
+        if (Test-Path -Path $ur) {
+            $report.ComposerResidues += $ur
+        }
+    }
+
+    # 7. Deteksi Polusi Variabel PATH Sistem
+    $patternsToRemove = @(
+        '\\laragon\\bin\\php',
+        '\\laragon',
+        '\\xampp\\php',
+        '\\xampp',
+        '\\tools\\php',
+        '\\php[^\\]*$',
+        '\\php8\d',
+        'Microsoft\\WinGet\\Packages\\PHP\.PHP',
+        'ComposerSetup',
+        'AppData\\Roaming\\Composer\\vendor\\bin'
+    )
+
+    foreach ($scope in @("Machine", "User")) {
+        $rawPath = [System.Environment]::GetEnvironmentVariable("Path", $scope)
+        if (-not [string]::IsNullOrWhiteSpace($rawPath)) {
+            $parts = $rawPath -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+            foreach ($p in $parts) {
+                foreach ($pat in $patternsToRemove) {
+                    if ($p -match $pat) {
+                        $report.PathPollutions += [PSCustomObject]@{
+                            Scope = $scope
+                            Path  = $p
+                        }
+                        if (Test-Path -Path $p) {
+                            [void]$discoveredDirs.Add($p)
+                        }
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    # 8. Deteksi Port Lock (Port 80, 443, 3306, 8080)
+    $portsToCheck = @(80, 443, 3306, 8080)
+    foreach ($port in $portsToCheck) {
+        $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+        foreach ($conn in $conns) {
+            $pidOwning = $conn.OwningProcess
+            $procName = "System/Kernel"
+            $pPath = ""
+            if ($pidOwning -gt 4) {
+                $pObj = Get-Process -Id $pidOwning -ErrorAction SilentlyContinue
+                if ($pObj) {
+                    $procName = $pObj.Name
+                    try { $pPath = $pObj.Path } catch {}
+                }
+            }
+            $report.PortConflicts += [PSCustomObject]@{
+                Port        = $port
+                PID         = $pidOwning
+                ProcessName = $procName
+                Path        = $pPath
+            }
+        }
+    }
+
+    # Klasifikasikan direktori yang ditemukan dan cek apakah ada data proyek pengguna
+    foreach ($d in $discoveredDirs) {
+        $norm = [System.IO.Path]::GetFullPath($d).TrimEnd('\')
+        if ($norm -match '^[A-Za-z]:$' -or $norm -match '(?i)^[A-Za-z]:\\(Windows|Program Files|Program Files \(x86\))$') {
+            continue
+        }
+
+        $dataDir = $null
+        $userDataFound = $false
+        if (Test-Path -Path (Join-Path -Path $norm -ChildPath "www")) {
+            $dataDir = "www"
+            $userDataFound = $true
+        } elseif (Test-Path -Path (Join-Path -Path $norm -ChildPath "htdocs")) {
+            $dataDir = "htdocs"
+            $userDataFound = $true
+        }
+
+        $report.DiscoveredPaths += [PSCustomObject]@{
+            Path        = $norm
+            HasUserData = $userDataFound
+            DataSubDir  = $dataDir
+        }
+    }
+
+    return $report
+}
+
 function Invoke-CleanPurgeLegacyLabStack {
     param (
         [switch]$Force = $false,
@@ -144,117 +411,159 @@ function Invoke-CleanPurgeLegacyLabStack {
     Write-Host "==================================================================" -ForegroundColor Yellow
     Write-Host "   CLEAN PURGE & FRESH RESET: WEB SERVER, DATABASE & RUNTIME      " -ForegroundColor Yellow
     Write-Host "==================================================================" -ForegroundColor Yellow
-    Write-Host " Prosedur ini akan membersihkan secara tuntas:" -ForegroundColor White
-    Write-Host " 1. Menghentikan semua proses zombie (Apache, MySQL, Nginx, PHP, Laragon, XAMPP)" -ForegroundColor Gray
-    Write-Host " 2. Menghapus Service Windows Apache & MySQL yang tersangkut / mengunci port" -ForegroundColor Gray
-    Write-Host " 3. Membersihkan residu instalasi lama di C:\xampp, C:\laragon, C:\tools\php*, C:\php" -ForegroundColor Gray
-    Write-Host " 4. Membersihkan PATH sistem dari entri PHP usang (8.1/8.2) & Composer rusak" -ForegroundColor Gray
-    Write-Host " 5. Melepaskan Port 80 & Port 3306 agar bebas bentrok untuk instalasi baru" -ForegroundColor Gray
-    Write-Host "==================================================================" -ForegroundColor Yellow
+
+    # Jalankan audit radar sistem secara dinamis di seluruh drive & registry
+    $audit = Find-LegacyLabStackLocations
+
+    Write-Host ""
+    Write-Host "===================== HASIL AUDIT SISTEM LAB DINAMIS =====================" -ForegroundColor Cyan
+    Write-Host " [1] Service Windows Terdeteksi    : $($audit.Services.Count)" -ForegroundColor $(if ($audit.Services.Count -gt 0) { "Yellow" } else { "Green" })
+    foreach ($s in $audit.Services) {
+        Write-Host "     - $($s.Name) ($($s.DisplayName)) -> [$($s.State)]" -ForegroundColor Gray
+    }
+
+    Write-Host " [2] Proses Zombie/Background Aktif: $($audit.Processes.Count)" -ForegroundColor $(if ($audit.Processes.Count -gt 0) { "Yellow" } else { "Green" })
+    foreach ($p in $audit.Processes) {
+        Write-Host "     - $($p.Name) (PID: $($p.Id)) -> $($p.Path)" -ForegroundColor Gray
+    }
+
+    Write-Host " [3] Direktori Stack Lama Ditemukan: $($audit.DiscoveredPaths.Count)" -ForegroundColor $(if ($audit.DiscoveredPaths.Count -gt 0) { "Yellow" } else { "Green" })
+    foreach ($dp in $audit.DiscoveredPaths) {
+        $backupNotice = if ($dp.HasUserData) { " [Ada Proyek Pengguna ($($dp.DataSubDir)) - Akan Dicadangkan]" } else { "" }
+        Write-Host "     - $($dp.Path)$backupNotice" -ForegroundColor Gray
+    }
+
+    Write-Host " [4] Polusi PATH Sistem Terdeteksi : $($audit.PathPollutions.Count)" -ForegroundColor $(if ($audit.PathPollutions.Count -gt 0) { "Yellow" } else { "Green" })
+    foreach ($pp in $audit.PathPollutions) {
+        Write-Host "     - [$($pp.Scope)] $($pp.Path)" -ForegroundColor Gray
+    }
+
+    Write-Host " [5] Residu Composer & Cache       : $($audit.ComposerResidues.Count)" -ForegroundColor $(if ($audit.ComposerResidues.Count -gt 0) { "Yellow" } else { "Green" })
+    foreach ($cr in $audit.ComposerResidues) {
+        Write-Host "     - $cr" -ForegroundColor Gray
+    }
+
+    Write-Host " [6] Konflik Port (80/443/3306)    : $($audit.PortConflicts.Count)" -ForegroundColor $(if ($audit.PortConflicts.Count -gt 0) { "Yellow" } else { "Green" })
+    foreach ($pc in $audit.PortConflicts) {
+        Write-Host "     - Port $($pc.Port) aktif oleh $($pc.ProcessName) (PID: $($pc.PID))" -ForegroundColor Gray
+    }
+    Write-Host "==========================================================================" -ForegroundColor Cyan
     Write-Host ""
 
     if (-not $Force) {
-        $confirm = Read-Host "Apakah Anda yakin ingin menjalankan CLEAN PURGE sekarang? (Y/N)"
+        $confirm = Read-Host "Apakah Anda yakin ingin melakukan CLEAN PURGE untuk seluruh item di atas? (Y/N)"
         if ($confirm -notmatch '^(y|ya|yes)$') {
             Write-LogInfo "Proses Clean Purge dibatalkan oleh pengguna."
             return $false
         }
     }
 
-    Write-LogStep "MEMULAI PROSES PEMBERSIHAN TOTAL (CLEAN PURGE & RESET)..."
+    Write-LogStep "MEMULAI EKSEKUSI PEMBERSIHAN TOTAL (CLEAN PURGE & RESET)..."
 
-    # 1. Hentikan semua proses terkait web server & PHP
-    Write-LogInfo "1/6. Menghentikan seluruh proses aktif terkait Web Server & Database..."
-    $procs = @("httpd", "mysqld", "mariadbd", "nginx", "php", "php-cgi", "laragon", "xampp-control", "xampp_start")
-    foreach ($p in $procs) {
-        $foundProcs = Get-Process -Name $p -ErrorAction SilentlyContinue
-        if ($foundProcs) {
-            Write-LogInfo "Mematikan proses: $p ($($foundProcs.Count) instance)..."
-            $foundProcs | Stop-Process -Force -ErrorAction SilentlyContinue
-        }
+    # 1. Hentikan semua proses aktif
+    Write-LogInfo "1/7. Menghentikan seluruh proses aktif terkait Web Server, PHP, dan Database..."
+    foreach ($p in $audit.Processes) {
+        try {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            Write-LogInfo "Proses $($p.Name) (PID: $($p.Id)) dihentikan."
+        } catch {}
+    }
+    $extraProcs = @("httpd", "mysqld", "mariadbd", "nginx", "php", "php-cgi", "laragon", "xampp-control", "xampp_start")
+    foreach ($ep in $extraProcs) {
+        $found = Get-Process -Name $ep -ErrorAction SilentlyContinue
+        if ($found) { $found | Stop-Process -Force -ErrorAction SilentlyContinue }
     }
     Start-Sleep -Seconds 1
 
-    # 2. Hentikan & Hapus Service Windows liar (Apache & MySQL)
-    Write-LogInfo "2/6. Menghentikan & menghapus Service Windows Apache & MySQL..."
-    $services = @("Apache2.4", "apache", "Apache", "mysql", "MySQL", "MySQL80", "MySQL8", "mysql8", "laragon", "xamppapache", "xamppmysql")
-    foreach ($svc in $services) {
-        $s = Get-Service -Name $svc -ErrorAction SilentlyContinue
-        if ($s) {
-            Write-LogInfo "Menghapus Windows Service: $svc..."
-            try { Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue } catch {}
-            Start-Process -FilePath "sc.exe" -ArgumentList "delete `"$svc`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+    # 2. Hentikan & Hapus Service Windows
+    Write-LogInfo "2/7. Menghapus seluruh Service Windows web server & database..."
+    foreach ($svc in $audit.Services) {
+        Write-LogInfo "Menghapus service: $($svc.Name)..."
+        try { Stop-Service -Name $svc.Name -Force -ErrorAction SilentlyContinue } catch {}
+        Start-Process -FilePath "sc.exe" -ArgumentList "delete `"$($svc.Name)`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+    }
+    $extraSvcs = @("Apache2.4", "apache", "Apache", "mysql", "MySQL", "MySQL80", "MySQL8", "mysql8", "laragon", "xamppapache", "xamppmysql")
+    foreach ($es in $extraSvcs) {
+        if (Get-Service -Name $es -ErrorAction SilentlyContinue) {
+            try { Stop-Service -Name $es -Force -ErrorAction SilentlyContinue } catch {}
+            Start-Process -FilePath "sc.exe" -ArgumentList "delete `"$es`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
         }
     }
 
-    # 3. Lepaskan Port 80 dari IIS / HTTP.sys / PID 4
-    Write-LogInfo "3/6. Membebaskan Port 80 dari lock Windows..."
+    # 3. Bebaskan Port 80, 443, 3306
+    Write-LogInfo "3/7. Membebaskan Port 80, 443, dan 3306..."
     if (Get-Command Resolve-Port80Conflict -ErrorAction SilentlyContinue) {
         Resolve-Port80Conflict | Out-Null
     }
 
-    # 4. Hapus folder instalasi lama (dengan opsi cadangkan htdocs/www jika ada proyek pengguna)
-    Write-LogInfo "4/6. Membersihkan direktori instalasi lama di disk C:..."
-    $dirsToClean = @(
-        @{ Path = "C:\laragon"; Name = "Laragon"; DataDir = "www" },
-        @{ Path = "C:\xampp";   Name = "XAMPP";   DataDir = "htdocs" },
-        @{ Path = "C:\tools\php85"; Name = "PHP 8.5 Standalone" },
-        @{ Path = "C:\php";     Name = "PHP Legacy" },
-        @{ Path = "C:\ProgramData\ComposerSetup"; Name = "Composer System Cache" }
-    )
-
+    # 4. Cadangkan Proyek Pengguna & Hapus Folder Lama
+    Write-LogInfo "4/7. Membersihkan direktori instalasi lama di seluruh drive..."
     $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
     $backupRoot = "C:\LAB_BACKUP_$timestamp"
 
-    foreach ($d in $dirsToClean) {
-        if (Test-Path -Path $d.Path) {
-            # Cadangkan proyek pengguna jika bukan bawaan installer
-            if (-not $SkipBackup -and $d.DataDir) {
-                $userProjectDir = Join-Path -Path $d.Path -ChildPath $d.DataDir
+    foreach ($dp in $audit.DiscoveredPaths) {
+        $folderPath = $dp.Path
+        if (Test-Path -Path $folderPath) {
+            # Cadangkan jika ada folder www atau htdocs
+            if (-not $SkipBackup -and $dp.HasUserData -and $dp.DataSubDir) {
+                $userProjectDir = Join-Path -Path $folderPath -ChildPath $dp.DataSubDir
                 if (Test-Path -Path $userProjectDir) {
                     $hasProjects = Get-ChildItem -Path $userProjectDir -ErrorAction SilentlyContinue | Where-Object { $_.Name -notin @("index.php", "index.html", "dashboard", "webalizer", "xampp", "favicon.ico") }
                     if ($hasProjects) {
-                        Write-LogInfo "Ditemukan file proyek pengguna di $userProjectDir. Menyimpan cadangan ke $backupRoot..."
+                        Write-LogInfo "Mencadangkan proyek pengguna dari $userProjectDir ke $backupRoot..."
                         if (-not (Test-Path -Path $backupRoot)) { New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null }
-                        $destBackup = Join-Path -Path $backupRoot -ChildPath "$($d.Name)_$($d.DataDir)"
+                        $safeFolderName = ($folderPath -replace '[:\\]', '_') + "_$($dp.DataSubDir)"
+                        $destBackup = Join-Path -Path $backupRoot -ChildPath $safeFolderName
                         Copy-Item -Path $userProjectDir -Destination $destBackup -Recurse -Force -ErrorAction SilentlyContinue
-                        Write-LogSuccess "Proyek dicadangkan ke: $destBackup"
+                        Write-LogSuccess "Proyek berhasil dicadangkan ke: $destBackup"
                     }
                 }
             }
 
-            Write-LogInfo "Menghapus folder lama: $($d.Path)..."
+            Write-LogInfo "Menghapus folder lama: $folderPath..."
             try {
-                # Gunakan cmd rmdir /s /q untuk kecepatan tinggi & bypass lock PowerShell
-                Start-Process -FilePath "cmd.exe" -ArgumentList "/c rmdir /s /q `"$($d.Path)`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
-                if (Test-Path -Path $d.Path) {
-                    Remove-Item -Path $d.Path -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
+                Start-Process -FilePath "cmd.exe" -ArgumentList "/c rmdir /s /q `"$folderPath`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+                if (Test-Path -Path $folderPath) {
+                    Remove-Item -Path $folderPath -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
                 }
-                Write-LogSuccess "Folder $($d.Path) berhasil dibersihkan."
+                Write-LogSuccess "Folder $folderPath berhasil dibersihkan."
             } catch {
-                Write-LogWarning "Gagal membersihkan sebagian file di $($d.Path): $_"
+                Write-LogWarning "Gagal membersihkan sebagian file di $($folderPath): $_"
             }
         }
     }
 
-    # Bersihkan cache global composer pengguna
-    $composerUserDir = Join-Path -Path $env:APPDATA -ChildPath "Composer"
-    if (Test-Path -Path $composerUserDir) {
-        Remove-Item -Path (Join-Path -Path $composerUserDir -ChildPath "vendor") -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
-        Remove-Item -Path (Join-Path -Path $composerUserDir -ChildPath "composer.lock") -Force -ErrorAction SilentlyContinue | Out-Null
-        Write-LogSuccess "Cache global Composer dibersihkan."
+    # Pastikan lokasi standar C: selalu dicek
+    $stdDirs = @("C:\laragon", "C:\xampp", "C:\tools\php85", "C:\php", "C:\ProgramData\ComposerSetup")
+    foreach ($sd in $stdDirs) {
+        if (Test-Path -Path $sd) {
+            Start-Process -FilePath "cmd.exe" -ArgumentList "/c rmdir /s /q `"$sd`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+            if (Test-Path -Path $sd) { Remove-Item -Path $sd -Recurse -Force -ErrorAction SilentlyContinue | Out-Null }
+        }
     }
 
-    # 5. Sanitasi PATH Sistem (Buang semua entri PHP 8.1, 8.2, XAMPP, Laragon, Composer lama)
-    Write-LogInfo "5/6. Membersihkan variabel PATH sistem dari entri lama yang bentrok..."
+    # 5. Bersihkan Residu Composer & Global Vendor
+    Write-LogInfo "5/7. Membersihkan residu Composer (cache & global vendor)..."
+    foreach ($cr in $audit.ComposerResidues) {
+        if (Test-Path -Path $cr) {
+            Remove-Item -Path $cr -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
+            Write-LogSuccess "Residu Composer $cr dibersihkan."
+        }
+    }
+
+    # 6. Sanitasi Variabel PATH Sistem & Pengguna
+    Write-LogInfo "6/7. Membersihkan variabel PATH sistem dari entri lama yang bentrok..."
     $patternsToRemove = @(
         '\\laragon\\bin\\php',
+        '\\laragon',
         '\\xampp\\php',
+        '\\xampp',
         '\\tools\\php',
-        '\\php$',
+        '\\php[^\\]*$',
         '\\php8\d',
         'Microsoft\\WinGet\\Packages\\PHP\.PHP',
-        'ComposerSetup\\bin'
+        'ComposerSetup',
+        'AppData\\Roaming\\Composer\\vendor\\bin'
     )
 
     foreach ($scope in @([System.EnvironmentVariableTarget]::Machine, [System.EnvironmentVariableTarget]::User)) {
@@ -284,15 +593,15 @@ function Invoke-CleanPurgeLegacyLabStack {
     Refresh-CurrentSessionEnvironment
     Broadcast-EnvironmentChange
 
-    # 6. Bersihkan Registry Cache LABInstaller
-    Write-LogInfo "6/6. Mereset cache detektor LABInstaller..."
+    # 7. Reset Cache Detektor LABInstaller
+    Write-LogInfo "7/7. Mereset cache detektor LABInstaller..."
     if (Get-Command Initialize-RegistryCache -ErrorAction SilentlyContinue) {
         Initialize-RegistryCache -ForceRefresh | Out-Null
     }
 
     Write-Host ""
-    Write-LogSuccess "BERSIH TOTAL: Semua residu PHP lama, Laragon, XAMPP, dan Service Windows berhasil di-PURGE!"
-    Write-LogSuccess "Sistem kini 100% FRESH dan siap dipasang paket baru yang bersih tanpa konflik!"
+    Write-LogSuccess "BERSIH TOTAL: Seluruh residu stack lama, service liar, port lock, dan file tersembunyi berhasil di-PURGE!"
+    Write-LogSuccess "Sistem kini 100% FRESH dan siap dipasang paket baru tanpa konflik!"
     Write-Host ""
     return $true
 }

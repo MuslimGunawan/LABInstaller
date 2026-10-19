@@ -1,7 +1,7 @@
 {
-  "version": "1.0.32",
+  "version": "1.0.33",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-20",
-  "description": "v1.0.32: Fitur Clean Reset & Fresh Purge (Menu 7) untuk pembersihan total residu Laragon, XAMPP, PHP usang (8.1/8.2), dan service Windows yang terkunci; deteksi minVersion cerdas untuk upgrade otomatis PHP 8.5; sanitasi PATH sistem; serta perlindungan cadangan otomatis proyek htdocs/www."
+  "description": "v1.0.33: Universal Dynamic Discovery & Deep Purge Engine (melacak otomatis lokasi tersembunyi PHP, Composer, Laragon, XAMPP, Web Server, dan MySQL di seluruh partisi drive, Windows Services, dan Registry tanpa perlu tahu lokasi instalasi sebelumnya); auto-audit radar; serta standarisasi minVersion untuk Java, Python, Node, dan Composer."
 }

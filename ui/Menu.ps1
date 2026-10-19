@@ -8,18 +8,26 @@ function Start-SmartInstallation {
         [string]$ScriptRootDirectory
     )
 
-    # Deteksi apakah ada residu web stack lama (Laragon, XAMPP, PHP lama)
-    $hasLegacyStack = (Test-Path "C:\laragon") -or (Test-Path "C:\xampp") -or (Test-Path "C:\php")
+    # Deteksi dinamis: cek apakah ada residu web stack, service liar, atau PATH lama di drive mana pun
+    $auditQuick = Find-LegacyLabStackLocations -Silent
+    $hasLegacyStack = ($auditQuick.Services.Count -gt 0) -or 
+                      ($auditQuick.Processes.Count -gt 0) -or 
+                      ($auditQuick.DiscoveredPaths.Count -gt 0) -or 
+                      ($auditQuick.PathPollutions.Count -gt 0)
+
     if ($hasLegacyStack) {
         Write-Host ""
         Write-Host "==================================================================" -ForegroundColor Yellow
-        Write-Host " PERHATIAN: Ditemukan instalasi web stack lama di C:\ (Laragon/XAMPP/PHP)!" -ForegroundColor Yellow
-        Write-Host " File terkunci, service zombie, atau PATH lama dapat memicu konflik." -ForegroundColor DarkYellow
+        Write-Host " PERHATIAN: Terdeteksi residu web server / service / PATH lama!" -ForegroundColor Yellow
+        Write-Host "   - Service Windows : $($auditQuick.Services.Count) service" -ForegroundColor DarkYellow
+        Write-Host "   - Proses aktif    : $($auditQuick.Processes.Count) proses" -ForegroundColor DarkYellow
+        Write-Host "   - Folder lama     : $($auditQuick.DiscoveredPaths.Count) lokasi (termasuk drive non-C)" -ForegroundColor DarkYellow
+        Write-Host "   - Polusi PATH     : $($auditQuick.PathPollutions.Count) entri" -ForegroundColor DarkYellow
         Write-Host "==================================================================" -ForegroundColor Yellow
         Write-Host ""
-        $purgePrompt = Read-Host "Ingin jalankan CLEAN PURGE (Hapus Total & Reset Fresh) sekarang? (Y/N)"
+        $purgePrompt = Read-Host "Ingin jalankan CLEAN PURGE (Hapus Total & Reset Fresh) terlebih dahulu? (Y/N)"
         if ($purgePrompt -match '^(y|ya|yes)$') {
-            Invoke-CleanPurgeLegacyLabStack
+            Invoke-CleanPurgeLegacyLabStack -Force
         }
     }
 

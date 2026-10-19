@@ -203,21 +203,13 @@ while ($true) {
             }
         }
         "7" {
-            Write-Host ""
-            Write-Host "PERINGATAN: Tindakan ini akan menghentikan proses zombie (Apache, MySQL, Nginx, PHP)," -ForegroundColor Yellow
-            Write-Host "menghapus Windows Services terkait, membersihkan folder C:\laragon, C:\xampp, C:\php," -ForegroundColor Yellow
-            Write-Host "membersihkan entri PATH usang, dan mencadangkan proyek pengguna dari htdocs/www." -ForegroundColor Yellow
-            Write-Host ""
-            $confirmPurge = Read-Host "Apakah Anda yakin ingin melakukan Clean Reset & Fresh Purge? (Y/N)"
-            if ($confirmPurge -match '^(y|ya|yes)$') {
-                Invoke-CleanPurgeLegacyLabStack
+            $purged = Invoke-CleanPurgeLegacyLabStack
+            if ($purged) {
                 Write-Host ""
                 $runSmartAfter = Read-Host "Apakah ingin langsung menjalankan Instalasi Pintar (Menu 1)? (Y/N)"
                 if ($runSmartAfter -match '^(y|ya|yes)$') {
                     Start-SmartInstallation -ScriptRootDirectory $ScriptRoot
                 }
-            } else {
-                Write-LogInfo "Proses Clean Purge dibatalkan."
             }
             Write-Host ""
             Write-Host "Tekan Enter untuk kembali ke menu..." -ForegroundColor Gray
