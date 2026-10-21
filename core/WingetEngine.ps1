@@ -416,8 +416,8 @@ function Invoke-WingetInstall {
         $timeoutMs = if ($Package.id -match "VisualStudio") { 1800000 } else { 900000 }
         $completed = $process.WaitForExit($timeoutMs)
 
-        if ($completed -and ($process.ExitCode -eq 0 -or $process.ExitCode -eq 2316632107)) {
-            Write-LogSuccess "$($Package.name) berhasil dipasang via WinGet (ExitCode: 0)."
+        if ($completed -and ($process.ExitCode -eq 0 -or $process.ExitCode -eq 2316632107 -or $process.ExitCode -eq -1978335189)) {
+            Write-LogSuccess "$($Package.name) berhasil dipasang via WinGet (ExitCode: $($process.ExitCode))."
             Refresh-CurrentSessionEnvironment
             return $true
         } else {
@@ -533,7 +533,8 @@ function Install-LocalFilePackage {
             # Validasi integritas ekstraksi: Jika paket memiliki pathCheck (misal C:\tools\php85\php.exe),
             # pastikan binari target benar-benar ada di dalam hasil ekstraksi!
             if ($Package.pathCheck) {
-                $expectedBinName = [System.IO.Path]::GetFileName($Package.pathCheck -replace '\*', '')
+                $cleanPathCheck = $Package.pathCheck -replace '\*', ''
+                $expectedBinName = [System.IO.Path]::GetFileName($cleanPathCheck)
                 $hasBin = Test-Path -Path (Join-Path -Path $destDir -ChildPath $expectedBinName)
                 if (-not $hasBin) {
                     $foundNested = Get-ChildItem -Path $destDir -Recurse -Filter $expectedBinName -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -542,6 +543,7 @@ function Install-LocalFilePackage {
                         $subFolder = $foundNested.DirectoryName
                         Get-ChildItem -Path $subFolder | Move-Item -Destination $destDir -Force -ErrorAction SilentlyContinue
                         $hasBin = Test-Path -Path (Join-Path -Path $destDir -ChildPath $expectedBinName)
+                        Remove-Item -Path $subFolder -Recurse -Force -ErrorAction SilentlyContinue
                     }
                 }
 

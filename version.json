@@ -1,7 +1,7 @@
 {
-  "version": "1.0.43",
+  "version": "1.0.44",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-21",
-  "description": "v1.0.43: Perbaikan Kritis Cache Matching PHP 8.5 vs phpMyAdmin & Self-Healing Runtime PHP. (1) Memperbaiki kesalahan pencocokan cache lokal di folder apps di mana PHP 8.5 keliru mencocokkan phpMyAdmin-5.2.1-all-languages.zip; (2) Menambahkan validasi integritas pasca-ekstraksi ZIP (pathCheck verification) agar arsip yang salah/korup langsung ditolak dan dialihkan mengunduh PHP 8.5 resmi dari php.net; (3) Self-healing otomatis jika C:\\tools\\php85 tidak memuat php.exe; (4) Pembuatan otomatis php.ini dari php.ini-development dan perbaikan verifikasi eksekusi Composer / Laravel Installer."
+  "description": "v1.0.44: Perbaikan Kritis Parsing GetFileName pada Ekstraksi ZIP & Penanganan ExitCode WinGet. (1) Memperbaiki parsing PowerShell pada [System.IO.Path]::GetFileName yang sebelumnya memicu error 'Cannot find an overload for GetFileName and the argument count: 2'; (2) Menambahkan pembersihan folder sarang setelah perataan binari; (3) Menambahkan penanganan signed exit code WinGet -1978335189 (0x8A15002B / ALREADY_INSTALLED) agar tidak dianggap gagal ketika paket sudah terpasang."
 }
