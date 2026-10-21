@@ -171,7 +171,7 @@ function Test-PackagePhysicalPresence {
         }
     }
 
-    # 5. Fallback Khusus Berdasarkan ID Aplikasi
+    # 5. Fallback Khusus Berdasarkan ID Aplikasi (Verifikasi Multi-Path Mutlak)
     switch ($Package.id) {
         "Apache.NetBeans" {
             $nbCandidates = @(
@@ -181,7 +181,8 @@ function Test-PackagePhysicalPresence {
                 "C:\Program Files (x86)\NetBeans*\bin\*.exe",
                 "C:\Program Files*\NetBeans*\netbeans\bin\*.exe",
                 "C:\Program Files*\Apache NetBeans*\netbeans\bin\*.exe",
-                "C:\NetBeans*\bin\*.exe"
+                "C:\NetBeans*\bin\*.exe",
+                "D:\NetBeans*\bin\*.exe"
             )
             foreach ($c in $nbCandidates) {
                 $item = Get-Item -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -201,6 +202,224 @@ function Test-PackagePhysicalPresence {
             foreach ($c in $ardCandidates) {
                 $item = Get-Item -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
                 if ($item) { return $true }
+            }
+            return $false
+        }
+        "Microsoft.VisualStudioCode" {
+            $vsCandidates = @(
+                "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe",
+                "C:\Program Files\Microsoft VS Code\Code.exe",
+                "C:\Program Files (x86)\Microsoft VS Code\Code.exe",
+                "C:\Users\*\AppData\Local\Programs\Microsoft VS Code\Code.exe"
+            )
+            foreach ($c in $vsCandidates) {
+                $item = Resolve-Path -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item -and (Test-Path -Path $item.Path)) { return $true }
+            }
+            return $false
+        }
+        "Google.AndroidStudio" {
+            $asCandidates = @(
+                "C:\Program Files\Android\Android Studio\bin\studio64.exe",
+                "C:\Program Files (x86)\Android\Android Studio\bin\studio64.exe",
+                "C:\Program Files*\Android Studio*\bin\studio64.exe",
+                "C:\Android\Android Studio\bin\studio64.exe"
+            )
+            foreach ($c in $asCandidates) {
+                $item = Resolve-Path -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item -and (Test-Path -Path $item.Path)) { return $true }
+            }
+            return $false
+        }
+        "Borland.Delphi.7" {
+            $d7Candidates = @(
+                "C:\Program Files (x86)\Borland\Delphi7\Bin\delphi32.exe",
+                "C:\Program Files\Borland\Delphi7\Bin\delphi32.exe",
+                "C:\Borland\Delphi7\Bin\delphi32.exe",
+                "D:\Borland\Delphi7\Bin\delphi32.exe"
+            )
+            foreach ($c in $d7Candidates) {
+                $item = Resolve-Path -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item -and (Test-Path -Path $item.Path)) { return $true }
+            }
+            return $false
+        }
+        "OSGeo.QGIS" {
+            $qgisCandidates = @(
+                "C:\Program Files\QGIS *\bin\qgis-bin.exe",
+                "C:\Program Files (x86)\QGIS *\bin\qgis-bin.exe",
+                "C:\OSGeo4W*\bin\qgis-bin.exe"
+            )
+            foreach ($c in $qgisCandidates) {
+                $item = Get-Item -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item) { return $true }
+            }
+            return $false
+        }
+        "Cisco.PacketTracer" {
+            $ptCandidates = @(
+                "C:\Program Files\Cisco Packet Tracer *\bin\PacketTracer.exe",
+                "C:\Program Files (x86)\Cisco Packet Tracer *\bin\PacketTracer.exe",
+                "C:\Cisco Packet Tracer *\bin\PacketTracer.exe"
+            )
+            foreach ($c in $ptCandidates) {
+                $item = Get-Item -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item) { return $true }
+            }
+            return $false
+        }
+        "Microsoft.Office.365.ProPlus" {
+            $offCandidates = @(
+                "C:\Program Files\Microsoft Office\root\Office*\WINWORD.EXE",
+                "C:\Program Files (x86)\Microsoft Office\root\Office*\WINWORD.EXE",
+                "C:\Program Files\Microsoft Office\Office*\WINWORD.EXE",
+                "C:\Program Files (x86)\Microsoft Office\Office*\WINWORD.EXE"
+            )
+            foreach ($c in $offCandidates) {
+                $item = Resolve-Path -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item -and (Test-Path -Path $item.Path)) { return $true }
+            }
+            return $false
+        }
+        "Microsoft.VisualStudio.2022.Community" {
+            $vs2022Candidates = @(
+                "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\devenv.exe",
+                "C:\Program Files (x86)\Microsoft Visual Studio\2022\Community\Common7\IDE\devenv.exe",
+                "C:\Program Files*\Microsoft Visual Studio\*\Community\Common7\IDE\devenv.exe"
+            )
+            foreach ($c in $vs2022Candidates) {
+                $item = Get-Item -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item) { return $true }
+            }
+            return $false
+        }
+        "Oracle.VirtualBox" {
+            $vboxCandidates = @(
+                "C:\Program Files\Oracle\VirtualBox\VirtualBox.exe",
+                "C:\Program Files (x86)\Oracle\VirtualBox\VirtualBox.exe"
+            )
+            foreach ($c in $vboxCandidates) {
+                $item = Resolve-Path -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item -and (Test-Path -Path $item.Path)) { return $true }
+            }
+            return $false
+        }
+        "Google.Chrome" {
+            $chromeCandidates = @(
+                "C:\Program Files\Google\Chrome\Application\chrome.exe",
+                "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
+            )
+            foreach ($c in $chromeCandidates) {
+                $item = Resolve-Path -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item -and (Test-Path -Path $item.Path)) { return $true }
+            }
+            return $false
+        }
+        "7zip.7zip" {
+            $sevenCandidates = @(
+                "C:\Program Files\7-Zip\7z.exe",
+                "C:\Program Files (x86)\7-Zip\7z.exe"
+            )
+            foreach ($c in $sevenCandidates) {
+                $item = Resolve-Path -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item -and (Test-Path -Path $item.Path)) { return $true }
+            }
+            return $false
+        }
+        "RARLab.WinRAR" {
+            $winrarCandidates = @(
+                "C:\Program Files\WinRAR\WinRAR.exe",
+                "C:\Program Files (x86)\WinRAR\WinRAR.exe"
+            )
+            foreach ($c in $winrarCandidates) {
+                $item = Resolve-Path -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item -and (Test-Path -Path $item.Path)) { return $true }
+            }
+            return $false
+        }
+        "Git.Git" {
+            $gitCandidates = @(
+                "C:\Program Files\Git\cmd\git.exe",
+                "C:\Program Files (x86)\Git\cmd\git.exe",
+                "C:\Program Files\Git\bin\git.exe"
+            )
+            foreach ($c in $gitCandidates) {
+                $item = Resolve-Path -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item -and (Test-Path -Path $item.Path)) { return $true }
+            }
+            return $false
+        }
+        "EclipseAdoptium.Temurin.21.JDK" {
+            $javaCandidates = @(
+                "C:\Program Files\Eclipse Adoptium\jdk-21*\bin\java.exe",
+                "C:\Program Files (x86)\Eclipse Adoptium\jdk-21*\bin\java.exe",
+                "C:\Program Files\Java\jdk-21*\bin\java.exe"
+            )
+            foreach ($c in $javaCandidates) {
+                $item = Get-Item -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item) { return $true }
+            }
+            return $false
+        }
+        "Python.Python.3.12" {
+            $pyCandidates = @(
+                "C:\Program Files\Python312\python.exe",
+                "C:\Program Files (x86)\Python312\python.exe",
+                "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
+                "C:\Python312\python.exe"
+            )
+            foreach ($c in $pyCandidates) {
+                $item = Resolve-Path -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item -and (Test-Path -Path $item.Path)) { return $true }
+            }
+            $pyCmd = Get-Command "python" -ErrorAction SilentlyContinue
+            if ($pyCmd -and $pyCmd.Source -notlike "*\Microsoft\WindowsApps\*") {
+                return $true
+            }
+            return $false
+        }
+        "OpenJS.NodeJS.LTS" {
+            $nodeCandidates = @(
+                "C:\Program Files\nodejs\node.exe",
+                "C:\Program Files (x86)\nodejs\node.exe"
+            )
+            foreach ($c in $nodeCandidates) {
+                $item = Resolve-Path -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item -and (Test-Path -Path $item.Path)) { return $true }
+            }
+            return $false
+        }
+        "PHP.PHP.8.5" {
+            $phpCandidates = @(
+                "C:\tools\php85\php.exe",
+                "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\PHP.PHP.8.5*\php.exe",
+                "C:\php\php.exe"
+            )
+            foreach ($c in $phpCandidates) {
+                $item = Resolve-Path -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item -and (Test-Path -Path $item.Path)) { return $true }
+            }
+            return $false
+        }
+        "Custom.FlutterSDK" {
+            $flutterCandidates = @(
+                "C:\tools\flutter\bin\flutter.bat",
+                "C:\src\flutter\bin\flutter.bat",
+                "$env:LOCALAPPDATA\flutter\bin\flutter.bat"
+            )
+            foreach ($c in $flutterCandidates) {
+                if (Test-Path -Path $c) { return $true }
+            }
+            return $false
+        }
+        "Microsoft.VCRedist.2015+.x64" {
+            $vcCandidates = @(
+                "C:\Windows\System32\vcruntime140.dll",
+                "C:\Windows\SysWOW64\vcruntime140.dll"
+            )
+            foreach ($c in $vcCandidates) {
+                if (Test-Path -Path $c) { return $true }
             }
             return $false
         }
@@ -361,18 +580,16 @@ function Get-PackageStatus {
     
     $match = $global:RegistryAppCache | Where-Object { $_.DisplayName -match $pattern } | Select-Object -First 1
     if ($match) {
-        # Validasi Integritas Fisik Disk (Anti-Residu Registry / Ghost Uninstaller)
-        # Jika paket mendefinisikan pathCheck (contoh: Laragon di C:\laragon\laragon.exe, XAMPP di C:\xampp\xampp-control.exe),
-        # pastikan berkas fisiknya BENAR-BENAR ada di disk sebelum menyatakan UP_TO_DATE.
-        if (-not [string]::IsNullOrWhiteSpace($Package.pathCheck)) {
-            $hasPhysical = Test-PackagePhysicalPresence -Package $Package -RegistryMatch $match
-            if (-not $hasPhysical) {
-                $result.Status = "NOT_INSTALLED"
-                $result.InstalledVersion = "-"
-                $result.TargetVersion = "Terbaru"
-                $result.Details = "Residu Registry terdeteksi ($($match.DisplayName)), namun berkas fisik ($($Package.pathCheck)) tidak ditemukan di disk. Diperlukan instalasi bersih."
-                return $result
-            }
+        # Validasi Integritas Fisik Disk (Anti-Residu Registry / Ghost Uninstaller / Dead Shortcuts)
+        # Seluruh paket yang cocok di registry WAJIB lolos uji kehadiran fisik berkas sebelum dinyatakan UP_TO_DATE.
+        $hasPhysical = Test-PackagePhysicalPresence -Package $Package -RegistryMatch $match
+        if (-not $hasPhysical) {
+            $result.Status = "NOT_INSTALLED"
+            $result.InstalledVersion = "-"
+            $result.TargetVersion = "Terbaru"
+            $targetDesc = if ($Package.pathCheck) { $Package.pathCheck } else { $Package.name }
+            $result.Details = "Residu Registry/Pintasan terdeteksi ($($match.DisplayName)), namun biner eksekutif fisik ($targetDesc) tidak ditemukan di disk. Diperlukan instalasi bersih."
+            return $result
         }
 
         # Validasi jika paket memiliki verifyCommand namun binary CLI tidak ada di sistem
@@ -450,6 +667,29 @@ function Get-CustomCommandFallbackPath {
             foreach ($c in $candidates) {
                 $matched = Get-Item -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
                 if ($matched) { return $matched.FullName }
+            }
+        }
+        "code" {
+            $candidates = @(
+                "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd",
+                "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe",
+                "C:\Program Files\Microsoft VS Code\bin\code.cmd",
+                "C:\Program Files\Microsoft VS Code\Code.exe",
+                "C:\Program Files (x86)\Microsoft VS Code\bin\code.cmd"
+            )
+            foreach ($c in $candidates) {
+                if (Test-Path -Path $c) { return $c }
+            }
+        }
+        "python" {
+            $candidates = @(
+                "C:\Program Files\Python312\python.exe",
+                "C:\Program Files (x86)\Python312\python.exe",
+                "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
+                "C:\Python312\python.exe"
+            )
+            foreach ($c in $candidates) {
+                if (Test-Path -Path $c) { return $c }
             }
         }
     }

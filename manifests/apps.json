@@ -38,6 +38,7 @@
     "priority": 14,
     "wingetId": "Microsoft.VisualStudioCode",
     "registryPattern": "(Visual Studio Code|VS Code)",
+    "pathCheck": "C:\\Program Files*\\Microsoft VS Code\\Code.exe",
     "verifyCommand": "code",
     "verifyArgs": ["--version"],
     "directUrl": "https://update.code.visualstudio.com/latest/win32-x64-user/stable",

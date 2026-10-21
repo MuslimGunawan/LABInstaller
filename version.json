@@ -1,7 +1,7 @@
 {
-  "version": "1.0.45",
+  "version": "1.0.46",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-22",
-  "description": "v1.0.45: Perbaikan Deteksi Fisik NetBeans & Eliminasi Pintasan Ghost/Mati. (1) Memperbaiki Test-PackagePhysicalPresence agar memeriksa TargetPath file .lnk (Desktop & Start Menu) secara nyata, mencegah pintasan mati/ghost membuat NetBeans keliru terdeteksi sebagai UP_TO_DATE; (2) Penegakan validasi fisik anti-residu registry untuk paket dengan pathCheck; (3) Menambahkan Setup-NetBeansPostInstall untuk verifikasi biner netbeans64.exe dan pembersihan otomatis pintasan rusak lama."
+  "description": "v1.0.46: Audit Menyeluruh Anti-Ghost & Penegakan Kehadiran Fisik 25 Paket Lab. (1) Mewajibkan verifikasi fisik biner pada SEMUA paket di registry (Test-PackagePhysicalPresence); (2) Menambahkan deteksi multi-path spesifik untuk seluruh IDE dan tool (VS Code, Delphi 7, QGIS, Packet Tracer, Office, Android Studio, Visual Studio, dll); (3) Menambahkan pathCheck pada VC++ Redist, VS Code, dan Python 3.12; (4) Menambahkan fallback CLI untuk VS Code dan Python."
 }
