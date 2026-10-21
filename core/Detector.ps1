@@ -115,88 +115,79 @@ function Test-PackagePhysicalPresence {
         }
     }
 
-    # 2. Cek InstallLocation dari Registry
+    # 2. Cek InstallLocation dari Registry (Wajib memuat biner .exe aplikasi, bukan folder kosong atau file log)
     if (-not [string]::IsNullOrWhiteSpace($RegistryMatch.InstallLocation)) {
         $instLoc = $RegistryMatch.InstallLocation.Trim('"').Trim()
         if (Test-Path -Path $instLoc) {
-            $items = Get-ChildItem -Path $instLoc -ErrorAction SilentlyContinue | Select-Object -First 1
+            $items = Get-ChildItem -Path $instLoc -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '(?i)(unins|setup|install|update)' } | Select-Object -First 1
             if ($items) { return $true }
         }
     }
 
-    # 3. Cek DisplayIcon dari Registry
+    # 3. Cek DisplayIcon dari Registry (Hanya jika mengarah ke berkas executable .exe yang benar-benar ada di disk)
     if (-not [string]::IsNullOrWhiteSpace($RegistryMatch.DisplayIcon)) {
         $rawIcon = ($RegistryMatch.DisplayIcon -replace ',\s*-?\d+$', '').Trim('"').Trim()
-        if ($rawIcon -and (Test-Path -Path $rawIcon)) {
+        if ($rawIcon -and (Test-Path -Path $rawIcon) -and ($rawIcon -match '\.exe$') -and ($rawIcon -notmatch '(?i)(unins|setup|install|update)')) {
             return $true
         }
     }
 
-    # 4. Cek UninstallString dari Registry
-    if (-not [string]::IsNullOrWhiteSpace($RegistryMatch.UninstallString)) {
-        $uninstPath = $RegistryMatch.UninstallString.Trim()
-        if ($uninstPath -match '^"([^"]+)"') {
-            $uninstPath = $matches[1]
-        } elseif ($uninstPath -match '^([^\s]+)') {
-            $uninstPath = $matches[1]
-        }
-        if ($uninstPath -and (Test-Path -Path $uninstPath)) {
-            return $true
-        }
-    }
+    # 4. Cek Pintasan Desktop & Start Menu
+    # ATURAN KRITIS: Pintasan (.lnk) WAJIB diverifikasi target filenya (TargetPath).
+    # Jika target file tidak ada di disk (dead/ghost link), pintasan dianggap sampah dan TIDAK membuktikan software terpasang!
+    $wscript = $null
+    try { $wscript = New-Object -ComObject WScript.Shell } catch {}
 
-    # 5. Cek Pintasan Desktop (Public & User Desktop)
-    $desktopDirs = @(
+    $shortcutDirs = @(
         "C:\Users\Public\Desktop",
-        [Environment]::GetFolderPath('Desktop')
+        [Environment]::GetFolderPath('Desktop'),
+        "C:\ProgramData\Microsoft\Windows\Start Menu\Programs",
+        "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
     )
     $searchTerms = @($Package.name, $RegistryMatch.DisplayName)
     if ($Package.registryPattern) { $searchTerms += $Package.registryPattern }
 
-    foreach ($dDir in $desktopDirs) {
-        if (-not (Test-Path -Path $dDir)) { continue }
-        $shortcuts = Get-ChildItem -Path $dDir -Filter "*.lnk" -ErrorAction SilentlyContinue
-        foreach ($sc in $shortcuts) {
-            foreach ($term in $searchTerms) {
-                if ($sc.BaseName -like "*$term*" -or $term -like "*$($sc.BaseName)*") {
-                    return $true
+    if ($wscript) {
+        foreach ($sDir in $shortcutDirs) {
+            if (-not (Test-Path -Path $sDir)) { continue }
+            $shortcuts = Get-ChildItem -Path $sDir -Recurse -Filter "*.lnk" -ErrorAction SilentlyContinue | Select-Object -First 150
+            foreach ($sc in $shortcuts) {
+                $matchedTerm = $false
+                foreach ($term in $searchTerms) {
+                    if ($sc.BaseName -like "*$term*" -or $term -like "*$($sc.BaseName)*") {
+                        $matchedTerm = $true
+                        break
+                    }
+                }
+                if ($matchedTerm) {
+                    try {
+                        $targetPath = $wscript.CreateShortcut($sc.FullName).TargetPath
+                        if ($targetPath -and (Test-Path -Path $targetPath) -and ($targetPath -match '\.exe$') -and ($targetPath -notmatch '(?i)(unins|setup|install|update)')) {
+                            return $true
+                        }
+                    } catch {}
                 }
             }
         }
     }
 
-    # 6. Cek Start Menu Shortcuts
-    $startMenuDirs = @(
-        "C:\ProgramData\Microsoft\Windows\Start Menu\Programs",
-        "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
-    )
-    foreach ($smDir in $startMenuDirs) {
-        if (-not (Test-Path -Path $smDir)) { continue }
-        $shortcuts = Get-ChildItem -Path $smDir -Recurse -Filter "*.lnk" -ErrorAction SilentlyContinue | Select-Object -First 200
-        foreach ($sc in $shortcuts) {
-            foreach ($term in $searchTerms) {
-                if ($sc.BaseName -like "*$term*") {
-                    return $true
-                }
-            }
-        }
-    }
-
-    # 7. Fallback Khusus Berdasarkan ID Aplikasi
+    # 5. Fallback Khusus Berdasarkan ID Aplikasi
     switch ($Package.id) {
         "Apache.NetBeans" {
             $nbCandidates = @(
-                "C:\Program Files\NetBeans*\bin\*.exe",
-                "C:\Program Files (x86)\NetBeans*\bin\*.exe",
                 "C:\Program Files\Apache NetBeans*\bin\*.exe",
+                "C:\Program Files\NetBeans*\bin\*.exe",
                 "C:\Program Files (x86)\Apache NetBeans*\bin\*.exe",
+                "C:\Program Files (x86)\NetBeans*\bin\*.exe",
                 "C:\Program Files*\NetBeans*\netbeans\bin\*.exe",
-                "C:\Program Files*\Apache NetBeans*\netbeans\bin\*.exe"
+                "C:\Program Files*\Apache NetBeans*\netbeans\bin\*.exe",
+                "C:\NetBeans*\bin\*.exe"
             )
             foreach ($c in $nbCandidates) {
                 $item = Get-Item -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
                 if ($item) { return $true }
             }
+            return $false
         }
         "ArduinoSA.IDE.stable" {
             $ardCandidates = @(
@@ -211,15 +202,17 @@ function Test-PackagePhysicalPresence {
                 $item = Get-Item -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
                 if ($item) { return $true }
             }
+            return $false
         }
     }
 
-    # Untuk Laragon & XAMPP: Jika folder root fisiknya di C: tidak ada, maka harus diinstal fresh
-    if ($Package.id -in @("Custom.Laragon", "ApacheFriends.Xampp.8.2")) {
+    # 6. Jika paket mendefinisikan pathCheck namun tidak ada satupun bukti biner fisik yang ditemukan di disk:
+    # Wajib return $false agar residu registry/pintasan tidak membohongi detektor instalasi!
+    if (-not [string]::IsNullOrWhiteSpace($Package.pathCheck)) {
         return $false
     }
 
-    # Default untuk software lain yang tercatat di registry Windows
+    # Default untuk paket non-pathCheck yang terdaftar di registry Windows
     return $true
 }
 

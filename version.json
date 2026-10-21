@@ -1,7 +1,7 @@
 {
-  "version": "1.0.44",
+  "version": "1.0.45",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
-  "releaseDate": "2026-10-21",
-  "description": "v1.0.44: Perbaikan Kritis Parsing GetFileName pada Ekstraksi ZIP & Penanganan ExitCode WinGet. (1) Memperbaiki parsing PowerShell pada [System.IO.Path]::GetFileName yang sebelumnya memicu error 'Cannot find an overload for GetFileName and the argument count: 2'; (2) Menambahkan pembersihan folder sarang setelah perataan binari; (3) Menambahkan penanganan signed exit code WinGet -1978335189 (0x8A15002B / ALREADY_INSTALLED) agar tidak dianggap gagal ketika paket sudah terpasang."
+  "releaseDate": "2026-10-22",
+  "description": "v1.0.45: Perbaikan Deteksi Fisik NetBeans & Eliminasi Pintasan Ghost/Mati. (1) Memperbaiki Test-PackagePhysicalPresence agar memeriksa TargetPath file .lnk (Desktop & Start Menu) secara nyata, mencegah pintasan mati/ghost membuat NetBeans keliru terdeteksi sebagai UP_TO_DATE; (2) Penegakan validasi fisik anti-residu registry untuk paket dengan pathCheck; (3) Menambahkan Setup-NetBeansPostInstall untuk verifikasi biner netbeans64.exe dan pembersihan otomatis pintasan rusak lama."
 }

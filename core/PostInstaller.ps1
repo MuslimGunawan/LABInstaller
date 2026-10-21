@@ -1402,6 +1402,60 @@ function Setup-VSCodePostInstall {
     }
 }
 
+function Setup-NetBeansPostInstall {
+    Write-LogStep "Mengonfigurasi dan Memvalidasi Instalasi Apache NetBeans IDE..."
+    if (Get-Command Refresh-CurrentSessionEnvironment -ErrorAction SilentlyContinue) {
+        Refresh-CurrentSessionEnvironment
+    }
+
+    $nbCandidates = @(
+        "C:\Program Files\Apache NetBeans*\bin\netbeans*.exe",
+        "C:\Program Files\NetBeans*\bin\netbeans*.exe",
+        "C:\Program Files (x86)\Apache NetBeans*\bin\netbeans*.exe",
+        "C:\Program Files (x86)\NetBeans*\bin\netbeans*.exe",
+        "C:\NetBeans*\bin\netbeans*.exe"
+    )
+
+    $nbExe = $null
+    foreach ($c in $nbCandidates) {
+        $found = Resolve-Path -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path
+        if ($found -and (Test-Path -Path $found)) {
+            $nbExe = $found
+            break
+        }
+    }
+
+    if ($nbExe) {
+        Write-LogSuccess "Apache NetBeans IDE terverifikasi aktif di: $nbExe"
+
+        # Bersihkan pintasan desktop yang rusak/mati (pointing ke path yang tidak ada)
+        $publicDesktop = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonDesktopDirectory)
+        $userDesktop   = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)
+        $desktopDirs = @($publicDesktop, $userDesktop)
+
+        $wscript = $null
+        try { $wscript = New-Object -ComObject WScript.Shell } catch {}
+
+        if ($wscript) {
+            foreach ($dDir in $desktopDirs) {
+                if (-not (Test-Path -Path $dDir)) { continue }
+                $shortcuts = Get-ChildItem -Path $dDir -Filter "*NetBeans*.lnk" -ErrorAction SilentlyContinue
+                foreach ($sc in $shortcuts) {
+                    try {
+                        $target = $wscript.CreateShortcut($sc.FullName).TargetPath
+                        if ($target -and (-not (Test-Path -Path $target))) {
+                            Write-LogInfo "Menghapus pintasan rusak lama di desktop: $($sc.Name)"
+                            Remove-Item -Path $sc.FullName -Force -ErrorAction SilentlyContinue
+                        }
+                    } catch {}
+                }
+            }
+        }
+    } else {
+        Write-LogWarning "Berkas eksekutif NetBeans belum ditemukan setelah proses instalasi."
+    }
+}
+
 function Setup-OfficePostInstall {
     Write-LogStep "Mengonfigurasi dan Memverifikasi Instalasi Microsoft 365 (Office C2R)..."
 

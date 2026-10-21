@@ -61,6 +61,7 @@
     "directArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-",
     "installType": "exe",
     "fileName": "Apache-NetBeans-31.exe",
+    "postInstallHandler": "Setup-NetBeansPostInstall",
     "description": "IDE resmi Apache NetBeans untuk Java, PHP, HTML5, dan C/C++ (Prioritas High-Speed GitHub Server)."
   },
   {
