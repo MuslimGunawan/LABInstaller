@@ -211,6 +211,46 @@ function Get-PackageStatus {
     
     $match = $global:RegistryAppCache | Where-Object { $_.DisplayName -match $pattern } | Select-Object -First 1
     if ($match) {
+        # Validasi Integritas Fisik Disk (Anti-Residu Registry / Ghost Uninstaller)
+        # Jika paket mendefinisikan pathCheck (contoh: Laragon di C:\laragon\laragon.exe, XAMPP di C:\xampp\xampp-control.exe),
+        # pastikan berkas fisiknya BENAR-BENAR ada di disk sebelum menyatakan UP_TO_DATE.
+        if (-not [string]::IsNullOrWhiteSpace($Package.pathCheck)) {
+            $hasPhysicalFile = $false
+            if ($Package.pathCheck -match '\*') {
+                $hasPhysicalFile = [bool](Get-Item -Path $Package.pathCheck -ErrorAction SilentlyContinue)
+            } else {
+                $hasPhysicalFile = (Test-Path -Path $Package.pathCheck)
+            }
+
+            if (-not $hasPhysicalFile) {
+                # Cek apakah InstallLocation dari Registry benar-benar valid dan ada
+                $installLoc = $match.InstallLocation
+                $hasLoc = $installLoc -and (Test-Path -Path $installLoc)
+                if (-not $hasLoc) {
+                    $result.Status = "NOT_INSTALLED"
+                    $result.InstalledVersion = "-"
+                    $result.TargetVersion = "Terbaru"
+                    $result.Details = "Residu Registry terdeteksi ($($match.DisplayName)), namun berkas fisik ($($Package.pathCheck)) tidak ditemukan di disk. Diperlukan instalasi bersih."
+                    return $result
+                }
+            }
+        }
+
+        # Validasi jika paket memiliki verifyCommand namun binary CLI tidak ada di sistem
+        if (-not [string]::IsNullOrWhiteSpace($Package.verifyCommand)) {
+            $cliCheck = Get-Command $Package.verifyCommand -ErrorAction SilentlyContinue
+            if (-not $cliCheck) {
+                $fallbackCli = Get-CustomCommandFallbackPath -CommandName $Package.verifyCommand
+                if (-not ($fallbackCli -and (Test-Path -Path $fallbackCli))) {
+                    $result.Status = "NOT_INSTALLED"
+                    $result.InstalledVersion = "-"
+                    $result.TargetVersion = "Terbaru"
+                    $result.Details = "Residu Registry terdeteksi ($($match.DisplayName)), namun CLI ($($Package.verifyCommand)) tidak ditemukan di PATH. Diperlukan instalasi bersih."
+                    return $result
+                }
+            }
+        }
+
         $result.InstalledVersion = if ($match.DisplayVersion) { $match.DisplayVersion } else { "Terpasang" }
         $result.TargetVersion = $result.InstalledVersion
 

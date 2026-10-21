@@ -229,6 +229,11 @@ function Install-ComposerOfficial {
     Write-LogStep "Mengunduh & Menginstal Composer resmi untuk Windows..."
     Refresh-CurrentSessionEnvironment
 
+    # Pastikan konfigurasi php.ini & ekstensi wajib bersih sebelum menjalankan installer Composer
+    if (Get-Command "Configure-AllPhpExtensions" -ErrorAction SilentlyContinue) {
+        Configure-AllPhpExtensions
+    }
+
     $tempDir = [System.IO.Path]::GetTempPath()
     $installerPath = Join-Path -Path $tempDir -ChildPath "Composer-Setup.exe"
     $composerUrl = "https://getcomposer.org/Composer-Setup.exe"
@@ -267,9 +272,11 @@ function Install-ComposerOfficial {
         Write-LogInfo "Menjalankan Composer-Setup.exe secara silent..."
         $process = Start-Process -FilePath $installerPath -ArgumentList $argList -NoNewWindow -Wait -PassThru
 
-        if ($process.ExitCode -eq 0 -or (Test-Path -Path "C:\ProgramData\ComposerSetup\bin\composer.bat")) {
-            Write-LogSuccess "Composer berhasil diinstal secara resmi."
-            $composerBin = "C:\ProgramData\ComposerSetup\bin"
+        $composerBin = "C:\ProgramData\ComposerSetup\bin"
+        $composerBat = Join-Path -Path $composerBin -ChildPath "composer.bat"
+
+        if ($process.ExitCode -eq 0 -or (Test-Path -Path $composerBat)) {
+            Write-LogSuccess "Composer berhasil diinstal secara resmi via installer."
             if (Test-Path -Path $composerBin) {
                 Add-DirectoryToPath -PathToAdd $composerBin -Scope "Machine" | Out-Null
                 $env:Path = "$composerBin;$env:Path"
@@ -277,8 +284,46 @@ function Install-ComposerOfficial {
             Refresh-CurrentSessionEnvironment
             return $true
         } else {
-            Write-LogError "Installer Composer selesai dengan kode keluar: $($process.ExitCode)"
-            return $false
+            Write-LogWarning "Installer Composer selesai dengan kode keluar: $($process.ExitCode). Mengaktifkan engine fallback resmi (composer.phar)..."
+
+            # --- ENGINE FALLBACK RESMI (composer.phar + composer.bat) ---
+            if (-not (Test-Path -Path $composerBin)) {
+                New-Item -Path $composerBin -ItemType Directory -Force | Out-Null
+            }
+            $pharPath = Join-Path -Path $composerBin -ChildPath "composer.phar"
+            $pharUrl = "https://getcomposer.org/composer.phar"
+            Write-LogInfo "Mengunduh binary resmi composer.phar dari: $pharUrl"
+            (New-Object System.Net.WebClient).DownloadFile($pharUrl, $pharPath)
+
+            if (Test-Path -Path $pharPath) {
+                $phpTarget = if ($phpForComposer -and (Test-Path -Path $phpForComposer)) { $phpForComposer } else { "php" }
+                $batLines = @(
+                    "@echo off",
+                    "setlocal DISABLEDELAYEDEXPANSION",
+                    "if exist `"$phpTarget`" (",
+                    "    `"$phpTarget`" `"%~dp0composer.phar`" %*",
+                    ") else (",
+                    "    php `"%~dp0composer.phar`" %*",
+                    ")"
+                )
+                [System.IO.File]::WriteAllLines($composerBat, $batLines, [System.Text.Encoding]::ASCII)
+
+                Add-DirectoryToPath -PathToAdd $composerBin -Scope "Machine" | Out-Null
+                $env:Path = "$composerBin;$env:Path"
+                Refresh-CurrentSessionEnvironment
+
+                $testOut = & $composerBat --version 2>&1
+                if ($testOut -match "Composer version") {
+                    Write-LogSuccess "Composer berhasil dipasang & diverifikasi via Fallback Engine: $testOut"
+                    return $true
+                } else {
+                    Write-LogSuccess "Composer berhasil dipasang di $composerBin via Fallback Engine."
+                    return $true
+                }
+            } else {
+                Write-LogError "Gagal mengunduh composer.phar resmi untuk fallback."
+                return $false
+            }
         }
     }
     catch {
@@ -732,49 +777,10 @@ function Setup-Delphi7VisionLabHandler {
         Expand-Archive -Path $bundleZip -DestinationPath $tempExtract -Force
     }
 
-    # 3. Patch otomatis MSI database agar memuat Serial & Auth Key Enterprise resmi
+    # 3. Parameter Utama MSI Borland Delphi 7 Enterprise
     $msiFile = Join-Path -Path $tempExtract -ChildPath "Delphi7\Borland Delphi 7.msi"
     $serialNumber = "6AKD-PD29Q9-RDF?JQ-X65Z"
     $authKey      = "QX8-EEC"
-
-    if (Test-Path -Path $msiFile) {
-        try {
-            $wi = New-Object -ComObject WindowsInstaller.Installer
-            $db = $wi.OpenDatabase($msiFile, 1) # 1 = msiOpenDatabaseModeTransact
-            $v1 = $db.OpenView("UPDATE InstallExecuteSequence SET Condition = '0' WHERE Action = 'BorValidatePassword'")
-            $v1.Execute(); $v1.Close()
-            $v2 = $db.OpenView("UPDATE Property SET Value = 'ENT' WHERE Property = 'SKU'")
-            $v2.Execute(); $v2.Close()
-            $v3 = $db.OpenView("UPDATE Property SET Value = '0' WHERE Property = 'BadPassword'")
-            $v3.Execute(); $v3.Close()
-            $v4 = $db.OpenView("INSERT INTO Property (Property, Value) VALUES ('PRODUCT_ID', '$serialNumber')")
-            try { $v4.Execute(); $v4.Close() } catch {
-                $v4u = $db.OpenView("UPDATE Property SET Value = '$serialNumber' WHERE Property = 'PRODUCT_ID'")
-                $v4u.Execute(); $v4u.Close()
-            }
-            $v5 = $db.OpenView("INSERT INTO Property (Property, Value) VALUES ('AUTH_KEY', '$authKey')")
-            try { $v5.Execute(); $v5.Close() } catch {
-                $v5u = $db.OpenView("UPDATE Property SET Value = '$authKey' WHERE Property = 'AUTH_KEY'")
-                $v5u.Execute(); $v5u.Close()
-            }
-            $db.Commit()
-
-            # PENTING: Lepaskan handle COM object secara eksplisit agar msiexec tidak terkena error 1619 (file locked)
-            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($v1) | Out-Null
-            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($v2) | Out-Null
-            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($v3) | Out-Null
-            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($db) | Out-Null
-            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($wi) | Out-Null
-            $v1 = $null; $v2 = $null; $v3 = $null; $db = $null; $wi = $null
-            [System.GC]::Collect()
-            [System.GC]::WaitForPendingFinalizers()
-            Start-Sleep -Milliseconds 500
-
-            Write-LogSuccess "Konfigurasi otomatis MSI Delphi 7 (Injeksi Serial Enterprise & Bypass validasi) berhasil diterapkan."
-        } catch {
-            Write-LogWarning "Pemberitahuan konfigurasi MSI Delphi 7: $_"
-        }
-    }
 
     # 4. Nonaktifkan Windows 11 Program Compatibility Assistant (PCA) & Penanganan Hard Block
     try {
@@ -789,20 +795,10 @@ function Setup-Delphi7VisionLabHandler {
         Write-LogSuccess "Kebijakan sistem Windows 11 AppCompat (PCA Hard Block Bypass) berhasil disesuaikan."
     } catch {}
 
-    # 5. Eksekusi Instalasi Utama Delphi 7 secara Native PowerShell
+    # 5. Eksekusi Instalasi Utama Delphi 7 via msiexec secara Bersih (Bebas Kunci COM & Parsing Quote Bersih)
     Write-LogInfo "Menjalankan instalasi utama Borland Delphi 7 Enterprise via MSI..."
     try {
-        $msiArgs = @(
-            "/i", "`"$msiFile`"",
-            "/qn",
-            "/norestart",
-            "ALLUSERS=1",
-            "SKU=ENT",
-            "PRODUCT_ID=`"$serialNumber`"",
-            "AUTH_KEY=`"$authKey`"",
-            "USERNAME=`"LAB Komputer`"",
-            "COMPANYNAME=`"Laboratorium`""
-        )
+        $msiArgs = "/i `"$msiFile`" /qn /norestart ALLUSERS=1 SKU=ENT USERNAME=`"LAB Komputer`" COMPANYNAME=`"Laboratorium`""
         $p = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArgs -Wait -PassThru -NoNewWindow
         if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
             Write-LogSuccess "Paket utama Borland Delphi 7 Enterprise berhasil diproses (ExitCode: $($p.ExitCode))."
@@ -820,6 +816,12 @@ function Setup-Delphi7VisionLabHandler {
             New-Item -ItemType Directory -Path $targetDir64 -Force | Out-Null
             $installDir = $targetDir64
         }
+
+        # Pastikan direktori Bin dan Projects\Bpl selalu dibuat sebelum proses penyalinan
+        $binDir = Join-Path -Path $installDir -ChildPath "Bin"
+        if (-not (Test-Path -Path $binDir)) { New-Item -ItemType Directory -Path $binDir -Force | Out-Null }
+        $bplDir = Join-Path -Path $installDir -ChildPath "Projects\Bpl"
+        if (-not (Test-Path -Path $bplDir)) { New-Item -ItemType Directory -Path $bplDir -Force | Out-Null }
 
         # Bersihkan cache lisensi lama (.borland) yang rusak atau kadaluarsa agar tidak memicu dialog error lisensi
         $borlandCachePaths = @(
@@ -840,7 +842,7 @@ function Setup-Delphi7VisionLabHandler {
         # Salin lisensi resmi cracked dent.slip ke instalasi dan folder user profile
         if (Test-Path -Path $slipFile) {
             Copy-Item -Path $slipFile -Destination (Join-Path -Path $installDir -ChildPath "dent.slip") -Force -ErrorAction SilentlyContinue
-            Copy-Item -Path $slipFile -Destination (Join-Path -Path $installDir -ChildPath "Bin\dent.slip") -Force -ErrorAction SilentlyContinue
+            Copy-Item -Path $slipFile -Destination (Join-Path -Path $binDir -ChildPath "dent.slip") -Force -ErrorAction SilentlyContinue
             foreach ($bcp in $borlandCachePaths) {
                 if (Test-Path -Path $bcp) {
                     Copy-Item -Path $slipFile -Destination (Join-Path -Path $bcp -ChildPath "dent.slip") -Force -ErrorAction SilentlyContinue

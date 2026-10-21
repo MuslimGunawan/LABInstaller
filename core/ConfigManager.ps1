@@ -1096,7 +1096,6 @@ function Configure-AllPhpExtensions {
         "zip",
         "intl",
         "exif",
-        "bcmath",
         "sodium"
     )
 
@@ -1109,25 +1108,41 @@ function Configure-AllPhpExtensions {
             $iniDir = Split-Path -Parent $iniPath
             $extDir = Join-Path -Path $iniDir -ChildPath "ext"
 
-            # 1. Bersihkan baris extension_dir lama agar tidak salah fallback ke C:\php\ext
-            $content = $content -replace '(?m)^;?\s*extension_dir\s*=.*`r?`n?', ''
+            # 1. Bersihkan semua baris extension_dir lama agar tidak salah fallback atau dobel
+            $content = $content -replace '(?m)^\s*;?\s*extension_dir\s*=.*`r?`n?', ''
 
-            # 2. Bersihkan semua deklarasi ekstensi wajib yang lama (mencegah duplicate warning openssl/module already loaded)
-            foreach ($ext in $requiredExtensions) {
-                $content = $content -replace "(?m)^extension\s*=\s*(php_)?$ext(\.dll)?\s*`r?`n?", ""
-                $content = $content -replace "(?m)^;extension\s*=\s*(php_)?$ext(\.dll)?\s*`r?`n?", ""
+            # 2. Bersihkan semua deklarasi ekstensi wajib yang lama & bcmath (mencegah duplicate warning openssl/module already loaded/bcmath)
+            $allToClean = @($requiredExtensions) + @("bcmath")
+            foreach ($ext in $allToClean) {
+                $content = $content -replace "(?m)^\s*;?\s*extension\s*=\s*(php_)?$ext(\.dll)?\s*`r?`n?", ""
             }
 
-            # 3. Bentuk blok ekstensi tunggal dan direktori ekstensi yang valid
+            # 3. Bentuk blok ekstensi tunggal dan direktori ekstensi yang valid (HANYA SATU extension_dir absolut)
             $extDirLines = ""
+            $availableDlls = @()
             if (Test-Path -Path $extDir) {
                 $normExt = $extDir.Replace('\', '/')
-                $extDirLines = "extension_dir = `"$normExt`"`r`nextension_dir = `"ext`"`r`n"
+                $extDirLines = "extension_dir = `"$normExt`"`r`n"
+                $availableDlls = @(Get-ChildItem -Path $extDir -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
+                    $_.BaseName -replace '^php_', ''
+                })
             } else {
                 $extDirLines = "extension_dir = `"ext`"`r`n"
             }
 
-            $extBlock = ($requiredExtensions | ForEach-Object { "extension=$_" }) -join "`r`n"
+            # Hanya aktifkan ekstensi yang file DLL fisiknya benar-benar ada di ext/ (bebas warning module not found)
+            $activeExtensions = @()
+            if ($availableDlls.Count -gt 0) {
+                $activeExtensions = $requiredExtensions | Where-Object {
+                    $availableDlls -contains $_ -or
+                    (Test-Path -Path (Join-Path -Path $extDir -ChildPath "php_$_.dll")) -or
+                    (Test-Path -Path (Join-Path -Path $extDir -ChildPath "$_.dll"))
+                }
+            } else {
+                $activeExtensions = $requiredExtensions | Where-Object { $_ -ne "bcmath" }
+            }
+
+            $extBlock = ($activeExtensions | ForEach-Object { "extension=$_" }) -join "`r`n"
             $injectionBlock = "$extDirLines$extBlock`r`n"
 
             if ($content -match '(?m)^\[PHP\]\s*`r?`n') {
@@ -1143,7 +1158,7 @@ function Configure-AllPhpExtensions {
             $content = $content -replace 'max_execution_time\s*=\s*\d+', 'max_execution_time = 300'
 
             [System.IO.File]::WriteAllText($iniPath, $content, $utf8NoBom)
-            Write-LogSuccess "Berhasil mengonfigurasi extension_dir & $($requiredExtensions.Count) ekstensi (bebas warning) di: $iniPath"
+            Write-LogSuccess "Berhasil mengonfigurasi extension_dir & $($activeExtensions.Count) ekstensi (bebas warning) di: $iniPath"
         }
         catch {
             Write-LogError "Gagal memperbarui $iniPath - $_"
@@ -1594,8 +1609,10 @@ function Repair-Delphi7LicenseAndEnvironment {
     }
 
     if ($validSlip) {
+        $binDir = Join-Path -Path $installDir -ChildPath "Bin"
+        if (-not (Test-Path -Path $binDir)) { New-Item -ItemType Directory -Path $binDir -Force | Out-Null }
         Copy-Item -Path $validSlip -Destination (Join-Path -Path $installDir -ChildPath "dent.slip") -Force -ErrorAction SilentlyContinue
-        Copy-Item -Path $validSlip -Destination (Join-Path -Path $installDir -ChildPath "Bin\dent.slip") -Force -ErrorAction SilentlyContinue
+        Copy-Item -Path $validSlip -Destination (Join-Path -Path $binDir -ChildPath "dent.slip") -Force -ErrorAction SilentlyContinue
         foreach ($bcp in $borlandCachePaths) {
             if (Test-Path -Path $bcp) {
                 Copy-Item -Path $validSlip -Destination (Join-Path -Path $bcp -ChildPath "dent.slip") -Force -ErrorAction SilentlyContinue
