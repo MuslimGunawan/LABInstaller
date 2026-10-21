@@ -84,6 +84,16 @@ function Test-PackagePhysicalPresence {
         [PSCustomObject]$RegistryMatch
     )
 
+    # ATURAN MUTLAK 0: Web Server Stack (Laragon & XAMPP)
+    # Wajib memiliki file eksekutif utama di root C:\ (C:\laragon\laragon.exe & C:\xampp\xampp-control.exe).
+    # Jangan pernah percaya residu pintasan desktop/Start Menu/Registry jika berkas fisik root tidak ada!
+    if ($Package.id -eq "Custom.Laragon") {
+        return (Test-Path -Path "C:\laragon\laragon.exe")
+    }
+    if ($Package.id -eq "ApacheFriends.Xampp.8.2") {
+        return (Test-Path -Path "C:\xampp\xampp-control.exe")
+    }
+
     # 1. Cek pathCheck langsung jika ada
     if (-not [string]::IsNullOrWhiteSpace($Package.pathCheck)) {
         if ($Package.pathCheck -match '\*') {

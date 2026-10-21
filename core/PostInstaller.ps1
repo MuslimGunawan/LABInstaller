@@ -517,13 +517,20 @@ function Invoke-GoogleDriveDownload {
 
 function Install-LaragonCustomSuite {
     param (
-        [string[]]$GdriveMirrors = @(
+        [PSCustomObject]$Package,
+        [string[]]$GdriveMirrors
+    )
+
+    if ($Package -and $Package.gdriveMirrors -and $Package.gdriveMirrors.Count -gt 0) {
+        $GdriveMirrors = $Package.gdriveMirrors
+    } elseif (-not $GdriveMirrors -or $GdriveMirrors.Count -eq 0) {
+        $GdriveMirrors = @(
             "1Nmy4yx8o8ddednr-DV6EJ5Gi6ukUWTaN",
             "16amKlAlav5lhydHcvjoVmTPQ3w8rLCkm",
             "1bbM4aMQbZcC-XyJNkU-36R6x8Wy2dbjp",
             "1qDaAbmCs0R850Z8bfm0zpqBLx-DhMH08"
         )
-    )
+    }
 
     Write-LogStep "Menginstal Laragon Custom Suite (Setup Resmi + Overlay Custom Milik Anda)..."
     Refresh-CurrentSessionEnvironment

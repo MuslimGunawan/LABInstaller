@@ -443,7 +443,8 @@ function Install-LocalFilePackage {
     try {
         if ($ext -eq ".msi") {
             Write-LogInfo "Memasang paket MSI: $FilePath..."
-            $msiArgs = "/i `"$FilePath`" $($Package.directArgs) /norestart"
+            $extraArgs = if (-not [string]::IsNullOrWhiteSpace($Package.directArgs)) { " " + $Package.directArgs } else { "" }
+            $msiArgs = "/i `"$FilePath`"$extraArgs /norestart"
             $p = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArgs -NoNewWindow -Wait -PassThru
             if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
                 Write-LogSuccess "$pkgName berhasil dipasang via MSI."
@@ -456,7 +457,16 @@ function Install-LocalFilePackage {
         }
         elseif ($ext -eq ".exe") {
             Write-LogInfo "Memasang paket EXE: $FilePath..."
-            $p = Start-Process -FilePath $FilePath -ArgumentList $Package.directArgs -NoNewWindow -Wait -PassThru
+            $procParams = @{
+                FilePath    = $FilePath
+                NoNewWindow = $true
+                Wait        = $true
+                PassThru    = $true
+            }
+            if (-not [string]::IsNullOrWhiteSpace($Package.directArgs)) {
+                $procParams["ArgumentList"] = $Package.directArgs
+            }
+            $p = Start-Process @procParams
             if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
                 Write-LogSuccess "$pkgName berhasil dipasang via EXE."
                 Refresh-CurrentSessionEnvironment
@@ -491,7 +501,16 @@ function Install-LocalFilePackage {
                 $setupExe = Get-ChildItem -Path $extractDir -Recurse -Filter "*.exe" | Select-Object -First 1
                 if ($setupExe) {
                     Write-LogInfo "Menjalankan installer yang diekstrak: $($setupExe.FullName)..."
-                    $p = Start-Process -FilePath $setupExe.FullName -ArgumentList $Package.directArgs -NoNewWindow -Wait -PassThru
+                    $procParams = @{
+                        FilePath    = $setupExe.FullName
+                        NoNewWindow = $true
+                        Wait        = $true
+                        PassThru    = $true
+                    }
+                    if (-not [string]::IsNullOrWhiteSpace($Package.directArgs)) {
+                        $procParams["ArgumentList"] = $Package.directArgs
+                    }
+                    $p = Start-Process @procParams
                     if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
                         Write-LogSuccess "$pkgName berhasil dipasang!"
                         Refresh-CurrentSessionEnvironment

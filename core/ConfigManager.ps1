@@ -460,8 +460,9 @@ function Invoke-CleanPurgeLegacyLabStack {
 
     Write-LogStep "MEMULAI EKSEKUSI PEMBERSIHAN TOTAL (CLEAN PURGE & RESET)..."
 
-    # 1. Hentikan semua proses aktif
+    # 1. Hentikan semua proses aktif secara agresif (taskkill force tree)
     Write-LogInfo "1/7. Menghentikan seluruh proses aktif terkait Web Server, PHP, dan Database..."
+    cmd.exe /c "taskkill /F /T /IM laragon* /IM mysqld* /IM mariadbd* /IM httpd* /IM nginx* /IM php* /IM xampp* 2>nul" | Out-Null
     foreach ($p in $audit.Processes) {
         try {
             Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
@@ -496,6 +497,21 @@ function Invoke-CleanPurgeLegacyLabStack {
         Resolve-Port80Conflict | Out-Null
     }
 
+    # Jalankan Uninstaller Resmi jika tersedia sebelum menghapus folder
+    if (Test-Path -Path "C:\laragon\unins000.exe") {
+        Write-LogInfo "Menjalankan uninstaller resmi Laragon..."
+        Start-Process -FilePath "C:\laragon\unins000.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+        Start-Sleep -Seconds 1
+    }
+    if (Test-Path -Path "C:\xampp\uninstall.exe") {
+        Write-LogInfo "Menjalankan uninstaller resmi XAMPP..."
+        Start-Process -FilePath "C:\xampp\uninstall.exe" -ArgumentList "--mode unattended" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+        Start-Sleep -Seconds 1
+    }
+
+    # Pastikan proses terkunci mati kembali
+    cmd.exe /c "taskkill /F /T /IM laragon* /IM mysqld* /IM mariadbd* /IM httpd* /IM nginx* /IM php* /IM xampp* 2>nul" | Out-Null
+
     # 4. Cadangkan Proyek Pengguna & Hapus Folder Lama
     Write-LogInfo "4/7. Membersihkan direktori instalasi lama di seluruh drive..."
     $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
@@ -522,6 +538,7 @@ function Invoke-CleanPurgeLegacyLabStack {
 
             Write-LogInfo "Menghapus folder lama: $folderPath..."
             try {
+                cmd.exe /c "attrib -r -s -h `"$folderPath\*.*`" /s /d 2>nul" | Out-Null
                 Start-Process -FilePath "cmd.exe" -ArgumentList "/c rmdir /s /q `"$folderPath`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
                 if (Test-Path -Path $folderPath) {
                     Remove-Item -Path $folderPath -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
@@ -533,12 +550,44 @@ function Invoke-CleanPurgeLegacyLabStack {
         }
     }
 
-    # Pastikan lokasi standar C: selalu dicek
+    # Pastikan lokasi standar C: selalu dibersihkan secara tuntas
     $stdDirs = @("C:\laragon", "C:\xampp", "C:\tools\php85", "C:\php", "C:\ProgramData\ComposerSetup")
     foreach ($sd in $stdDirs) {
         if (Test-Path -Path $sd) {
+            cmd.exe /c "attrib -r -s -h `"$sd\*.*`" /s /d 2>nul" | Out-Null
             Start-Process -FilePath "cmd.exe" -ArgumentList "/c rmdir /s /q `"$sd`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
             if (Test-Path -Path $sd) { Remove-Item -Path $sd -Recurse -Force -ErrorAction SilentlyContinue | Out-Null }
+        }
+    }
+
+    # Hapus seluruh pintasan desktop & Start Menu untuk Laragon dan XAMPP
+    Write-LogInfo "Menghapus pintasan desktop dan Start Menu untuk Laragon & XAMPP..."
+    $shortcutsToClean = @(
+        "C:\Users\Public\Desktop\*laragon*.lnk",
+        "$([Environment]::GetFolderPath('Desktop'))\*laragon*.lnk",
+        "C:\Users\Public\Desktop\*xampp*.lnk",
+        "$([Environment]::GetFolderPath('Desktop'))\*xampp*.lnk",
+        "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\*laragon*",
+        "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\*laragon*",
+        "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\*xampp*",
+        "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\*xampp*"
+    )
+    foreach ($sc in $shortcutsToClean) {
+        Get-Item -Path $sc -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    # Bersihkan Registry Uninstall key Laragon & XAMPP
+    $regPurgeKeys = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Laragon",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Laragon",
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\xampp",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\xampp",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Laragon",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\xampp"
+    )
+    foreach ($rk in $regPurgeKeys) {
+        if (Test-Path -Path $rk) {
+            Remove-Item -Path $rk -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
 

@@ -30,6 +30,7 @@
     "wingetId": "ApacheFriends.Xampp.8.2",
     "registryPattern": "XAMPP",
     "pathCheck": "C:\\xampp\\xampp-control.exe",
+    "gdriveMirrors": [],
     "directUrl": "https://sourceforge.net/projects/xampp/files/XAMPP%20Windows/8.2.12/xampp-windows-x64-8.2.12-0-VS16-installer.exe/download",
     "directArgs": "--mode unattended",
     "installType": "exe",
