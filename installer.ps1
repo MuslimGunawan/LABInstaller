@@ -162,10 +162,11 @@ while ($true) {
     Write-Host "  [5] Aktivasi Otomatis Microsoft Windows & Office (HWID & Ohook)" -ForegroundColor Green
     Write-Host "  [6] Buka Folder Log Aktivitas" -ForegroundColor White
     Write-Host "  [7] Clean Reset & Fresh Purge (Hapus Total Residu PHP, Laragon, XAMPP & Service)" -ForegroundColor Red
+    Write-Host "  [8] Khusus Web Server: Fresh Install & Port Isolation (Laragon + XAMPP + phpMyAdmin)" -ForegroundColor Cyan
     Write-Host "  [0] Keluar" -ForegroundColor DarkGray
     Write-Host ""
 
-    $pilihan = Read-Host "Masukkan pilihan Anda (0-7)"
+    $pilihan = Read-Host "Masukkan pilihan Anda (0-8)"
 
     switch ($pilihan) {
         "1" {
@@ -215,6 +216,9 @@ while ($true) {
             Write-Host "Tekan Enter untuk kembali ke menu..." -ForegroundColor Gray
             [void][System.Console]::ReadLine()
         }
+        "8" {
+            Start-WebServerOnlyFreshInstall -ScriptRootDirectory $ScriptRoot
+        }
         "0" {
             Stop-LabKeepAliveGuard
             Write-LogInfo "Keluar dari LABInstaller. Terima kasih!"
@@ -222,7 +226,7 @@ while ($true) {
             exit
         }
         Default {
-            Write-LogWarning "Pilihan '$pilihan' tidak valid. Silakan pilih 0 - 7."
+            Write-LogWarning "Pilihan '$pilihan' tidak valid. Silakan pilih 0 - 8."
             Start-Sleep -Seconds 1
         }
     }

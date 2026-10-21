@@ -713,8 +713,141 @@ function Install-LaragonOfficial {
     }
 }
 
+function Install-LaragonPhpMyAdmin {
+    param (
+        [string]$LaragonDir = "C:\laragon"
+    )
+
+    if (-not (Test-Path -Path $LaragonDir)) {
+        return $false
+    }
+
+    Write-LogStep "Memeriksa & Mengonfigurasi phpMyAdmin resmi untuk Laragon..."
+    $appsDir = Get-AppStorageDirectory
+    $pmaTargetDir = Join-Path -Path $LaragonDir -ChildPath "etc\apps\phpMyAdmin"
+    $pmaIndex = Join-Path -Path $pmaTargetDir -ChildPath "index.php"
+
+    if (Test-Path -Path $pmaIndex) {
+        Write-LogSuccess "phpMyAdmin sudah terpasang di Laragon: $pmaTargetDir"
+    } else {
+        $pmaZipUrl = "https://files.phpmyadmin.net/phpMyAdmin/5.2.1/phpMyAdmin-5.2.1-all-languages.zip"
+        $pmaZipPath = Join-Path -Path $appsDir -ChildPath "phpMyAdmin-5.2.1-all-languages.zip"
+
+        # Cek apakah zip sudah ada di cache apps/
+        if (-not (Test-Path -Path $pmaZipPath) -or (Get-Item -Path $pmaZipPath).Length -lt 10000000) {
+            Write-LogInfo "Mengunduh paket resmi phpMyAdmin 5.2.1 dari server phpmyadmin.net..."
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            $wc = New-Object System.Net.WebClient
+            $wc.Headers.Add("User-Agent", "Wget/1.21.3")
+            try {
+                $wc.DownloadFile($pmaZipUrl, $pmaZipPath)
+                Write-LogSuccess "Paket phpMyAdmin berhasil diunduh ke folder apps ($([math]::Round((Get-Item $pmaZipPath).Length/1MB, 2)) MB)."
+            } catch {
+                Write-LogWarning "Gagal mengunduh phpMyAdmin dari server utama: $_"
+                return $false
+            }
+        } else {
+            Write-LogSuccess "Menggunakan berkas phpMyAdmin dari cache apps: $pmaZipPath"
+        }
+
+        # Ekstrak ke folder sementara di apps/
+        $extractTemp = Join-Path -Path $appsDir -ChildPath "pma_temp"
+        if (Test-Path -Path $extractTemp) { Remove-Item -Path $extractTemp -Recurse -Force -ErrorAction SilentlyContinue }
+        New-Item -ItemType Directory -Path $extractTemp -Force | Out-Null
+
+        Write-LogInfo "Mengekstrak paket phpMyAdmin..."
+        $sevenZipExe = "C:\Program Files\7-Zip\7z.exe"
+        if (Test-Path -Path $sevenZipExe) {
+            Start-Process -FilePath $sevenZipExe -ArgumentList "x `"$pmaZipPath`" -o`"$extractTemp`" -y" -NoNewWindow -Wait
+        } else {
+            Expand-Archive -Path $pmaZipPath -DestinationPath $extractTemp -Force
+        }
+
+        # Cari subfolder yang berisi index.php
+        $extractedRoot = Get-ChildItem -Path $extractTemp -Filter "phpMyAdmin*" -Directory | Select-Object -First 1
+        if (-not $extractedRoot) { $extractedRoot = Get-Item -Path $extractTemp }
+
+        if (Test-Path -Path (Join-Path -Path $extractedRoot.FullName -ChildPath "index.php")) {
+            if (-not (Test-Path -Path $pmaTargetDir)) {
+                New-Item -ItemType Directory -Path $pmaTargetDir -Force | Out-Null
+            }
+            Write-LogInfo "Memasang berkas phpMyAdmin ke $pmaTargetDir..."
+            Copy-Item -Path "$($extractedRoot.FullName)\*" -Destination $pmaTargetDir -Recurse -Force
+            Remove-Item -Path $extractTemp -Recurse -Force -ErrorAction SilentlyContinue
+            Write-LogSuccess "phpMyAdmin 5.2.1 berhasil dipasang ke Laragon!"
+        } else {
+            Write-LogWarning "Gagal menemukan berkas index.php dari arsip ekstraksi phpMyAdmin."
+            return $false
+        }
+    }
+
+    # Konfigurasi Apache Alias di Laragon: C:\laragon\etc\apache2\alias\phpmyadmin.conf
+    $aliasDir = Join-Path -Path $LaragonDir -ChildPath "etc\apache2\alias"
+    if (-not (Test-Path -Path $aliasDir)) { New-Item -ItemType Directory -Path $aliasDir -Force | Out-Null }
+    $aliasFile = Join-Path -Path $aliasDir -ChildPath "phpmyadmin.conf"
+    $aliasContent = @"
+Alias /phpmyadmin "C:/laragon/etc/apps/phpMyAdmin/"
+
+<Directory "C:/laragon/etc/apps/phpMyAdmin/">
+    Options Indexes FollowSymLinks MultiViews
+    AllowOverride all
+    Require all granted
+</Directory>
+"@
+    [System.IO.File]::WriteAllText($aliasFile, $aliasContent, [System.Text.Encoding]::ASCII)
+
+    # Konfigurasi config.inc.php phpMyAdmin (Auto-login root tanpa password, bebas warning)
+    $pmaConfig = Join-Path -Path $pmaTargetDir -ChildPath "config.inc.php"
+    $cleanConfigContent = @"
+<?php
+/**
+ * phpMyAdmin Configuration - LABInstaller Auto-Login & Zero-Warning
+ */
+`$cfg['blowfish_secret'] = 'vK8mQ2xL9pZ4wR7tY1uI3oE5aA6sD8fG';
+
+`$i = 0;
+`$i++;
+`$cfg['Servers'][`$i]['auth_type'] = 'config';
+`$cfg['Servers'][`$i]['host'] = '127.0.0.1';
+`$cfg['Servers'][`$i]['port'] = '3306';
+`$cfg['Servers'][`$i]['user'] = 'root';
+`$cfg['Servers'][`$i]['password'] = '';
+`$cfg['Servers'][`$i]['AllowNoPassword'] = true;
+`$cfg['Servers'][`$i]['Compress'] = false;
+
+`$cfg['UploadDir'] = '';
+`$cfg['SaveDir'] = '';
+`$cfg['PmaNoRelation_DisableWarning'] = true;
+`$cfg['SendErrorReports'] = 'never';
+`$cfg['VersionCheck'] = false;
+"@
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($pmaConfig, $cleanConfigContent, $utf8NoBom)
+    Write-LogSuccess "Konfigurasi phpMyAdmin Laragon (Auto-Login Root & Bebas Warning) berhasil diterapkan!"
+
+    # Konfigurasi laragon.ini agar tombol "Database" langsung membuka phpMyAdmin di browser
+    $laragonIni = Join-Path -Path $LaragonDir -ChildPath "usr\laragon.ini"
+    if (Test-Path -Path $laragonIni) {
+        $iniText = Get-Content -Path $laragonIni -Raw
+        if ($iniText -match '(?i)Database=.*') {
+            $iniText = $iniText -replace '(?i)Database=.*', 'Database=phpMyAdmin:"http://localhost/phpmyadmin"'
+        } elseif ($iniText -match '\[ui\]') {
+            $iniText = $iniText -replace '\[ui\]', "[ui]`r`nDatabase=phpMyAdmin:`"http://localhost/phpmyadmin`""
+        } else {
+            $iniText += "`r`n[ui]`r`nDatabase=phpMyAdmin:`"http://localhost/phpmyadmin`""
+        }
+        [System.IO.File]::WriteAllText($laragonIni, $iniText, $utf8NoBom)
+        Write-LogSuccess "Tombol 'Database' pada antarmuka Laragon disetel membuka phpMyAdmin otomatis."
+    }
+
+    return $true
+}
+
 function Setup-LaragonEnvironment {
     Write-LogStep "Menyiapkan integrasi lingkungan Laragon..."
+    
+    # Pasang dan konfigurasi phpMyAdmin untuk Laragon
+    Install-LaragonPhpMyAdmin -LaragonDir "C:\laragon" | Out-Null
     
     # Tambahkan git bawaan Laragon atau bin ke PATH jika diperlukan
     $laragonGit = "C:\laragon\bin\git\cmd"

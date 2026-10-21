@@ -1044,6 +1044,9 @@ server {
 
         # 3. Optimasi phpMyAdmin Laragon (Auto-Login Root tanpa password & Bebas Warning)
         Write-LogInfo "Menyesuaikan phpMyAdmin Laragon agar Auto-Login (tanpa login popup) & Bebas Warning..."
+        if (Get-Command Install-LaragonPhpMyAdmin -ErrorAction SilentlyContinue) {
+            Install-LaragonPhpMyAdmin -LaragonDir $laragonDir | Out-Null
+        }
         $laragonPmaConfig = Join-Path -Path $laragonDir -ChildPath "etc\apps\phpMyAdmin\config.inc.php"
         if (Test-Path -Path $laragonPmaConfig) {
             $lPmaText = Get-Content -Path $laragonPmaConfig -Raw

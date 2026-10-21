@@ -233,3 +233,84 @@ function Show-UpdateMenuDialog {
 
     return $false
 }
+
+function Start-WebServerOnlyFreshInstall {
+    param (
+        [string]$ScriptRootDirectory
+    )
+
+    Show-LabBanner -Version (Get-LocalVersionInfo).version
+
+    Write-Host ""
+    Write-Host "==================================================================" -ForegroundColor Cyan
+    Write-Host "    KHUSUS WEB SERVER: FRESH INSTALL & PORT ISOLATION RESMI      " -ForegroundColor Yellow
+    Write-Host "          (Laragon 6.0 + XAMPP 8.2 + phpMyAdmin Auto-Login)       " -ForegroundColor White
+    Write-Host "==================================================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host " Tindakan yang akan dieksekusi:" -ForegroundColor White
+    Write-Host "   1. Membersihkan (Clean Purge) total residu Laragon, XAMPP, dan Service lama." -ForegroundColor Gray
+    Write-Host "   2. Menginstal Laragon 6.0.0 ke C:\laragon (Port Apache 80 & MySQL 3306)." -ForegroundColor Gray
+    Write-Host "   3. Menginstal phpMyAdmin 5.2.1 ke Laragon + Auto-Login Root tanpa password." -ForegroundColor Gray
+    Write-Host "   4. Mengonfigurasi tombol 'Database' Laragon agar otomatis membuka phpMyAdmin." -ForegroundColor Gray
+    Write-Host "   5. Menginstal XAMPP 8.2 ke C:\xampp (Port Apache 8080 & MySQL 3307)." -ForegroundColor Gray
+    Write-Host "   6. Mengisolasi port & firewall sehingga Laragon dan XAMPP jalan berdampingan." -ForegroundColor Gray
+    Write-Host "   (CATATAN: Aplikasi lain seperti NetBeans/Arduino/VSCode TIDAK AKAN disentuh!)" -ForegroundColor Green
+    Write-Host ""
+
+    $confirm = Read-Host "Apakah Anda yakin ingin melakukan Fresh Install khusus Web Server? (Y/N)"
+    if ($confirm -notmatch '^(y|ya|yes)$') {
+        Write-LogWarning "Proses instalasi web server dibatalkan oleh pengguna."
+        Start-Sleep -Seconds 2
+        return
+    }
+
+    # 1. Bersihkan tuntas instalasi web server sebelumnya
+    Write-LogStep "MEMULAI BERSIH TOTAL RESIDU WEB SERVER LAMA..."
+    Invoke-CleanPurgeLegacyLabStack -Force
+
+    # 2. Muat manifest servers.json
+    $manifestDir = Join-Path -Path $ScriptRootDirectory -ChildPath "manifests"
+    $serversJson = Join-Path -Path $manifestDir -ChildPath "servers.json"
+    $serverPkgs = Get-Content -Path $serversJson -Raw -Encoding UTF8 | ConvertFrom-Json
+
+    Initialize-RegistryCache -ForceRefresh | Out-Null
+
+    # 3. Instalasi Laragon
+    $laragonPkg = $serverPkgs | Where-Object { $_.id -eq "Custom.Laragon" } | Select-Object -First 1
+    if ($laragonPkg) {
+        Write-Host ""
+        Invoke-PackageInstall -Package $laragonPkg | Out-Null
+        if ($laragonPkg.postInstallHandler) {
+            & $laragonPkg.postInstallHandler
+        }
+    }
+
+    # 4. Pastikan phpMyAdmin terpasang di Laragon
+    Install-LaragonPhpMyAdmin -LaragonDir "C:\laragon" | Out-Null
+
+    # 5. Instalasi XAMPP
+    $xamppPkg = $serverPkgs | Where-Object { $_.id -eq "ApacheFriends.Xampp.8.2" } | Select-Object -First 1
+    if ($xamppPkg) {
+        Write-Host ""
+        Invoke-PackageInstall -Package $xamppPkg | Out-Null
+        if ($xamppPkg.postInstallHandler) {
+            & $xamppPkg.postInstallHandler
+        }
+    }
+
+    # 6. Konfigurasi Port, Firewall, & phpMyAdmin Isolasi
+    Write-Host ""
+    Start-FullEnvironmentConfiguration
+
+    Write-Host ""
+    Write-Host "========================== HASIL INSTALASI WEB SERVER ==========================" -ForegroundColor Cyan
+    Write-LogSuccess "FRESH INSTALL WEB SERVER BERHASIL DILAKUKAN!"
+    Write-Host "   - Laragon Web Server : http://localhost/ (Port 80)" -ForegroundColor Green
+    Write-Host "   - Laragon phpMyAdmin : http://localhost/phpmyadmin/ (Auto-Login Root)" -ForegroundColor Green
+    Write-Host "   - XAMPP Web Server   : http://localhost:8080/ (Port 8080)" -ForegroundColor Yellow
+    Write-Host "   - XAMPP phpMyAdmin   : http://localhost:8080/phpmyadmin/ (Port 3307)" -ForegroundColor Yellow
+    Write-Host "================================================================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Tekan Enter untuk kembali ke menu utama..." -ForegroundColor Gray
+    [void][System.Console]::ReadLine()
+}

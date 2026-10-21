@@ -1,7 +1,7 @@
 {
-  "version": "1.0.38",
+  "version": "1.0.39",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-21",
-  "description": "v1.0.38: Perbaikan total ekosistem web server & instalasi Office. (1) Perbaikan Start-Process pada Office C2R agar tidak error ParameterBinding saat directArgs kosong; (2) Aturan Mutlak 0 pada Detector: Laragon & XAMPP wajib diverifikasi lewat binary root (C:\\laragon\\laragon.exe & C:\\xampp\\xampp-control.exe) sehingga shortcut orphan desktop tidak lagi memicu false UP_TO_DATE; (3) Clean Purge Nuklir: Force taskkill process tree, uninstaller otomatis, pembersihan folder tuntas, pembersihan pintasan desktop & Start Menu, serta pembersihan Registry; (4) Dukungan multi-mirror dinamis untuk Laragon & XAMPP."
+  "description": "v1.0.39: Fitur Khusus Web Server & Integrasi phpMyAdmin Otomatis. (1) Menu baru [8] Khusus Web Server: Fresh Install tuntas Laragon 6.0 + XAMPP 8.2 + phpMyAdmin tanpa menyentuh software lain; (2) Pemasangan otomatis phpMyAdmin 5.2.1 resmi ke C:\\laragon\\etc\\apps\\phpMyAdmin dengan konfigurasi Auto-Login Root bebas password & zero-warning; (3) Tombol 'Database' pada antarmuka Laragon disetel membuka phpMyAdmin otomatis di browser alih-alih HeidiSQL; (4) Penyelarasan isolasi port Apache 80/8080 dan MySQL 3306/3307."
 }
