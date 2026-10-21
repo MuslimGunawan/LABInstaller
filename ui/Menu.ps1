@@ -23,9 +23,10 @@ function Start-SmartInstallation {
         Write-Host "   - Proses aktif    : $($auditQuick.Processes.Count) proses" -ForegroundColor DarkYellow
         Write-Host "   - Folder lama     : $($auditQuick.DiscoveredPaths.Count) lokasi (termasuk drive non-C)" -ForegroundColor DarkYellow
         Write-Host "   - Polusi PATH     : $($auditQuick.PathPollutions.Count) entri" -ForegroundColor DarkYellow
+        Write-Host "   (Catatan: Clean Purge HANYA membersihkan web server & database lama. IDE seperti NetBeans/Arduino TIDAK disentuh)" -ForegroundColor Gray
         Write-Host "==================================================================" -ForegroundColor Yellow
         Write-Host ""
-        $purgePrompt = Read-Host "Ingin jalankan CLEAN PURGE (Hapus Total & Reset Fresh) terlebih dahulu? (Y/N)"
+        $purgePrompt = Read-Host "Ingin jalankan CLEAN PURGE (Reset Fresh Web Server XAMPP/Laragon/PHP/MySQL)? (Y/N)"
         if ($purgePrompt -match '^(y|ya|yes)$') {
             Invoke-CleanPurgeLegacyLabStack -Force
         }

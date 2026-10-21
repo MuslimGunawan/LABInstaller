@@ -10,3 +10,12 @@ logs/
 Thumbs.db
 Desktop.ini
 
+# Downloaded installers in apps/ (exceeds GitHub 100MB limit)
+apps/*.exe
+apps/*.zip
+apps/*.msi
+apps/*.yaml
+apps/*.rar
+!apps/dent.slip
+!apps/rarreg.key
+

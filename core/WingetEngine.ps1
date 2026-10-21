@@ -101,6 +101,54 @@ function Get-AppStorageDirectory {
     return $appsDir
 }
 
+function Test-ValidInstallerFile {
+    param (
+        [string]$FilePath,
+        [string]$ExpectedType = "exe",
+        [long]$MinSizeBytes = 1000000 # Minimal 1 MB
+    )
+
+    if (-not (Test-Path -Path $FilePath)) { return $false }
+    $fileItem = Get-Item -Path $FilePath -ErrorAction SilentlyContinue
+    if (-not $fileItem -or $fileItem.Length -lt $MinSizeBytes) { return $false }
+
+    try {
+        $fs = [System.IO.File]::OpenRead($FilePath)
+        $buf = New-Object byte[] 64
+        $read = $fs.Read($buf, 0, 64)
+        $fs.Close()
+
+        if ($read -lt 4) { return $false }
+
+        # Tolak jika berkas diawali tag HTML / XML (halaman web error / SourceForge landing page)
+        $headerAscii = [System.Text.Encoding]::ASCII.GetString($buf[0..([math]::Min(31, $read - 1))])
+        if ($headerAscii -match '^\s*<(!DOCTYPE|html|\?xml)') {
+            return $false
+        }
+
+        switch ($ExpectedType.ToLower()) {
+            "exe" {
+                # Validasi Magic Header PE Windows: MZ (0x4D 0x5A)
+                return ($buf[0] -eq 77 -and $buf[1] -eq 90)
+            }
+            "zip" {
+                # Validasi Magic Header ZIP: PK (0x50 0x4B)
+                return ($buf[0] -eq 80 -and $buf[1] -eq 75)
+            }
+            "msi" {
+                # Validasi Magic Header OLE Compound: 0xD0 0xCF 0x11 0xE0
+                return ($buf[0] -eq 208 -and $buf[1] -eq 207 -and $buf[2] -eq 17 -and $buf[3] -eq 224)
+            }
+            Default {
+                return $true
+            }
+        }
+    }
+    catch {
+        return $false
+    }
+}
+
 function Invoke-GoogleDriveFileDownload {
     param (
         [string]$FileId,
@@ -125,7 +173,7 @@ function Invoke-GoogleDriveFileDownload {
             $fs = [System.IO.File]::Create($OutPath)
             $stream.CopyTo($fs)
             $fs.Close(); $stream.Close(); $resp.Close()
-            return ((Test-Path $OutPath) -and ((Get-Item $OutPath).Length -gt 1000))
+            return (Test-ValidInstallerFile -FilePath $OutPath -ExpectedType "zip" -MinSizeBytes 10000000)
         }
 
         $sr = New-Object System.IO.StreamReader($resp.GetResponseStream())
@@ -147,12 +195,26 @@ function Invoke-GoogleDriveFileDownload {
         $req2.AllowAutoRedirect = $true
 
         $resp2 = $req2.GetResponse()
+        if ($resp2.ContentType -match "text/html") {
+            $sr2 = New-Object System.IO.StreamReader($resp2.GetResponseStream())
+            $html2 = $sr2.ReadToEnd()
+            $sr2.Close(); $resp2.Close()
+            if ($html2 -match 'Quota exceeded|Too many users') {
+                Write-LogWarning "Kuota unduhan Google Drive untuk berkas ini tercapai."
+            }
+            return $false
+        }
+
         $stream2 = $resp2.GetResponseStream()
         $fs = [System.IO.File]::Create($OutPath)
         $stream2.CopyTo($fs)
         $fs.Close(); $stream2.Close(); $resp2.Close()
 
-        return ((Test-Path $OutPath) -and ((Get-Item $OutPath).Length -gt 1000))
+        $isValid = (Test-ValidInstallerFile -FilePath $OutPath -ExpectedType "zip" -MinSizeBytes 10000000)
+        if (-not $isValid -and (Test-Path -Path $OutPath)) {
+            Remove-Item -Path $OutPath -Force -ErrorAction SilentlyContinue
+        }
+        return $isValid
     }
     catch {
         return $false
@@ -222,20 +284,27 @@ function Invoke-PackageInstall {
     # 1b. Jalur Local Cache Folder apps (Jika file installer fisik sudah ada di apps/ atau direktori proyek)
     $appsDir = Get-AppStorageDirectory
     $targetFileName = if ($Package.fileName) { $Package.fileName } else { "" }
+    $pkgType = if ($Package.installType) { $Package.installType.ToLower() } else { "exe" }
+    $minExpectedSize = if ($Package.id -in @("ApacheFriends.Xampp.8.2", "Custom.Laragon")) { 50000000 } else { 1000000 }
     $localCacheFile = $null
 
     if ($targetFileName) {
         $exactPath = Join-Path -Path $appsDir -ChildPath $targetFileName
-        if ((Test-Path -Path $exactPath) -and ((Get-Item -Path $exactPath).Length -gt 100000)) {
-            $localCacheFile = $exactPath
+        if (Test-Path -Path $exactPath) {
+            if (Test-ValidInstallerFile -FilePath $exactPath -ExpectedType $pkgType -MinSizeBytes $minExpectedSize) {
+                $localCacheFile = $exactPath
+            } else {
+                Write-LogWarning "Berkas di cache ($exactPath) tidak valid atau korup (halaman HTML/ukuran tidak sesuai). Menghapus cache..."
+                Remove-Item -Path $exactPath -Force -ErrorAction SilentlyContinue
+            }
         }
     }
 
     if (-not $localCacheFile) {
         # Cari file alternatif di folder apps yang cocok dengan nama paket / pattern installer (misal hasil unduhan WinGet)
-        $matchedFile = Get-ChildItem -Path $appsDir -Filter "*.exe" -ErrorAction SilentlyContinue | Where-Object {
-            $_.Length -gt 100000 -and (
-                ($targetFileName -and $_.Name -like "*$($targetFileName -replace '\.exe','')*") -or
+        $matchedFile = Get-ChildItem -Path $appsDir -Filter "*.$pkgType" -ErrorAction SilentlyContinue | Where-Object {
+            (Test-ValidInstallerFile -FilePath $_.FullName -ExpectedType $pkgType -MinSizeBytes $minExpectedSize) -and (
+                ($targetFileName -and $_.Name -like "*$($targetFileName -replace '\.[^.]+$','')*") -or
                 ($Package.id -and $_.Name -like "*$($Package.id.Split('.')[-1])*") -or
                 ($Package.name -and $_.Name -like "*$($Package.name.Split(' ')[0])*")
             )
@@ -463,13 +532,16 @@ function Invoke-DirectInstaller {
     $appsDir = Get-AppStorageDirectory
     $fileName = if ($Package.fileName) { $Package.fileName } else { "labinst_$($Package.id -replace '[^a-zA-Z0-9]','_').$type" }
     $localFile = Join-Path -Path $appsDir -ChildPath $fileName
+    $minExpectedSize = if ($Package.id -in @("ApacheFriends.Xampp.8.2", "Custom.Laragon")) { 50000000 } else { 1000000 }
 
-    # Gunakan cache lokal jika file sudah ada dan ukurannya valid
+    # Gunakan cache lokal jika file sudah ada dan ukurannya serta integritasnya valid
     if (Test-Path -Path $localFile) {
-        $existLen = (Get-Item -Path $localFile).Length
-        if ($existLen -gt 100000) {
-            Write-LogSuccess "Berkas installer $pkgName sudah tersedia di folder apps (Cache): $localFile"
+        if (Test-ValidInstallerFile -FilePath $localFile -ExpectedType $type -MinSizeBytes $minExpectedSize) {
+            Write-LogSuccess "Berkas installer $pkgName sudah tersedia di folder apps (Cache Valid): $localFile"
             return (Install-LocalFilePackage -Package $Package -FilePath $localFile)
+        } else {
+            Write-LogWarning "Berkas di cache ($localFile) terdeteksi korup/tidak valid. Menghapus dan mengunduh ulang..."
+            Remove-Item -Path $localFile -Force -ErrorAction SilentlyContinue
         }
     }
 
@@ -479,7 +551,8 @@ function Invoke-DirectInstaller {
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         $wc = New-Object System.Net.WebClient
-        $wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) LABInstaller")
+        # Gunakan User-Agent Wget agar SourceForge & CDN vendor langsung mengirim biner installer tanpa interupsi landing page HTML
+        $wc.Headers.Add("User-Agent", "Wget/1.21.3")
 
         # Unduh dengan retry hingga 2 kali
         $downloadSuccess = $false
@@ -487,9 +560,12 @@ function Invoke-DirectInstaller {
             try {
                 if ($attempt -gt 1) { Write-LogInfo "Mencoba mengunduh ulang (Percobaan $attempt)..." }
                 $wc.DownloadFile($url, $localFile)
-                if (Test-Path -Path $localFile) {
+                if (Test-ValidInstallerFile -FilePath $localFile -ExpectedType $type -MinSizeBytes $minExpectedSize) {
                     $downloadSuccess = $true
                     break
+                } else {
+                    Write-LogWarning "Berkas hasil unduhan tidak lolos validasi header/ukuran. Menghapus percobaan..."
+                    if (Test-Path -Path $localFile) { Remove-Item -Path $localFile -Force -ErrorAction SilentlyContinue }
                 }
             }
             catch {
@@ -498,7 +574,7 @@ function Invoke-DirectInstaller {
         }
 
         if (-not $downloadSuccess) {
-            throw "Gagal mengunduh berkas installer dari tautan vendor."
+            throw "Gagal mengunduh berkas installer yang valid dari tautan vendor."
         }
 
         return (Install-LocalFilePackage -Package $Package -FilePath $localFile)

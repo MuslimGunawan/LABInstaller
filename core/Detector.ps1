@@ -76,6 +76,143 @@ function Convert-ToVersionObject {
     }
 }
 
+function Test-PackagePhysicalPresence {
+    param (
+        [Parameter(Mandatory=$true)]
+        [PSCustomObject]$Package,
+        [Parameter(Mandatory=$true)]
+        [PSCustomObject]$RegistryMatch
+    )
+
+    # 1. Cek pathCheck langsung jika ada
+    if (-not [string]::IsNullOrWhiteSpace($Package.pathCheck)) {
+        if ($Package.pathCheck -match '\*') {
+            $foundItem = Get-Item -Path $Package.pathCheck -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($foundItem) { return $true }
+        } elseif (Test-Path -Path $Package.pathCheck) {
+            return $true
+        }
+
+        # Cek variasi Program Files (x86) jika pathCheck berada di Program Files
+        if ($Package.pathCheck -match 'Program Files' -and $Package.pathCheck -notmatch 'Program Files \(x86\)') {
+            $x86Path = $Package.pathCheck -replace 'Program Files', 'Program Files (x86)'
+            if ($x86Path -match '\*') {
+                $foundItem = Get-Item -Path $x86Path -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($foundItem) { return $true }
+            } elseif (Test-Path -Path $x86Path) {
+                return $true
+            }
+        }
+    }
+
+    # 2. Cek InstallLocation dari Registry
+    if (-not [string]::IsNullOrWhiteSpace($RegistryMatch.InstallLocation)) {
+        $instLoc = $RegistryMatch.InstallLocation.Trim('"').Trim()
+        if (Test-Path -Path $instLoc) {
+            $items = Get-ChildItem -Path $instLoc -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($items) { return $true }
+        }
+    }
+
+    # 3. Cek DisplayIcon dari Registry
+    if (-not [string]::IsNullOrWhiteSpace($RegistryMatch.DisplayIcon)) {
+        $rawIcon = ($RegistryMatch.DisplayIcon -replace ',\s*-?\d+$', '').Trim('"').Trim()
+        if ($rawIcon -and (Test-Path -Path $rawIcon)) {
+            return $true
+        }
+    }
+
+    # 4. Cek UninstallString dari Registry
+    if (-not [string]::IsNullOrWhiteSpace($RegistryMatch.UninstallString)) {
+        $uninstPath = $RegistryMatch.UninstallString.Trim()
+        if ($uninstPath -match '^"([^"]+)"') {
+            $uninstPath = $matches[1]
+        } elseif ($uninstPath -match '^([^\s]+)') {
+            $uninstPath = $matches[1]
+        }
+        if ($uninstPath -and (Test-Path -Path $uninstPath)) {
+            return $true
+        }
+    }
+
+    # 5. Cek Pintasan Desktop (Public & User Desktop)
+    $desktopDirs = @(
+        "C:\Users\Public\Desktop",
+        [Environment]::GetFolderPath('Desktop')
+    )
+    $searchTerms = @($Package.name, $RegistryMatch.DisplayName)
+    if ($Package.registryPattern) { $searchTerms += $Package.registryPattern }
+
+    foreach ($dDir in $desktopDirs) {
+        if (-not (Test-Path -Path $dDir)) { continue }
+        $shortcuts = Get-ChildItem -Path $dDir -Filter "*.lnk" -ErrorAction SilentlyContinue
+        foreach ($sc in $shortcuts) {
+            foreach ($term in $searchTerms) {
+                if ($sc.BaseName -like "*$term*" -or $term -like "*$($sc.BaseName)*") {
+                    return $true
+                }
+            }
+        }
+    }
+
+    # 6. Cek Start Menu Shortcuts
+    $startMenuDirs = @(
+        "C:\ProgramData\Microsoft\Windows\Start Menu\Programs",
+        "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
+    )
+    foreach ($smDir in $startMenuDirs) {
+        if (-not (Test-Path -Path $smDir)) { continue }
+        $shortcuts = Get-ChildItem -Path $smDir -Recurse -Filter "*.lnk" -ErrorAction SilentlyContinue | Select-Object -First 200
+        foreach ($sc in $shortcuts) {
+            foreach ($term in $searchTerms) {
+                if ($sc.BaseName -like "*$term*") {
+                    return $true
+                }
+            }
+        }
+    }
+
+    # 7. Fallback Khusus Berdasarkan ID Aplikasi
+    switch ($Package.id) {
+        "Apache.NetBeans" {
+            $nbCandidates = @(
+                "C:\Program Files\NetBeans*\bin\*.exe",
+                "C:\Program Files (x86)\NetBeans*\bin\*.exe",
+                "C:\Program Files\Apache NetBeans*\bin\*.exe",
+                "C:\Program Files (x86)\Apache NetBeans*\bin\*.exe",
+                "C:\Program Files*\NetBeans*\netbeans\bin\*.exe",
+                "C:\Program Files*\Apache NetBeans*\netbeans\bin\*.exe"
+            )
+            foreach ($c in $nbCandidates) {
+                $item = Get-Item -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item) { return $true }
+            }
+        }
+        "ArduinoSA.IDE.stable" {
+            $ardCandidates = @(
+                "C:\Program Files\Arduino*\*.exe",
+                "C:\Program Files (x86)\Arduino*\*.exe",
+                "C:\Program Files\Arduino IDE*\*.exe",
+                "C:\Program Files (x86)\Arduino IDE*\*.exe",
+                "$env:LOCALAPPDATA\Programs\arduino-ide\*.exe",
+                "$env:LOCALAPPDATA\Programs\Arduino IDE\*.exe"
+            )
+            foreach ($c in $ardCandidates) {
+                $item = Get-Item -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($item) { return $true }
+            }
+        }
+    }
+
+    # Untuk Laragon & XAMPP: Jika folder root fisiknya di C: tidak ada, maka harus diinstal fresh
+    if ($Package.id -in @("Custom.Laragon", "ApacheFriends.Xampp.8.2")) {
+        return $false
+    }
+
+    # Default untuk software lain yang tercatat di registry Windows
+    return $true
+}
+
 function Get-PackageStatus {
     param (
         [Parameter(Mandatory=$true)]
@@ -136,6 +273,16 @@ function Get-PackageStatus {
                 $resolvedPaths = Get-Item -Path $Package.pathCheck -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
             } elseif (Test-Path -Path $Package.pathCheck) {
                 $resolvedPaths = @($Package.pathCheck)
+            }
+
+            # Cek variasi Program Files (x86) jika pathCheck berada di Program Files
+            if ($resolvedPaths.Count -eq 0 -and $Package.pathCheck -match 'Program Files' -and $Package.pathCheck -notmatch 'Program Files \(x86\)') {
+                $x86Path = $Package.pathCheck -replace 'Program Files', 'Program Files (x86)'
+                if ($x86Path -match '\*') {
+                    $resolvedPaths = Get-Item -Path $x86Path -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+                } elseif (Test-Path -Path $x86Path) {
+                    $resolvedPaths = @($x86Path)
+                }
             }
 
             if ($resolvedPaths.Count -gt 0) {
@@ -215,24 +362,13 @@ function Get-PackageStatus {
         # Jika paket mendefinisikan pathCheck (contoh: Laragon di C:\laragon\laragon.exe, XAMPP di C:\xampp\xampp-control.exe),
         # pastikan berkas fisiknya BENAR-BENAR ada di disk sebelum menyatakan UP_TO_DATE.
         if (-not [string]::IsNullOrWhiteSpace($Package.pathCheck)) {
-            $hasPhysicalFile = $false
-            if ($Package.pathCheck -match '\*') {
-                $hasPhysicalFile = [bool](Get-Item -Path $Package.pathCheck -ErrorAction SilentlyContinue)
-            } else {
-                $hasPhysicalFile = (Test-Path -Path $Package.pathCheck)
-            }
-
-            if (-not $hasPhysicalFile) {
-                # Cek apakah InstallLocation dari Registry benar-benar valid dan ada
-                $installLoc = $match.InstallLocation
-                $hasLoc = $installLoc -and (Test-Path -Path $installLoc)
-                if (-not $hasLoc) {
-                    $result.Status = "NOT_INSTALLED"
-                    $result.InstalledVersion = "-"
-                    $result.TargetVersion = "Terbaru"
-                    $result.Details = "Residu Registry terdeteksi ($($match.DisplayName)), namun berkas fisik ($($Package.pathCheck)) tidak ditemukan di disk. Diperlukan instalasi bersih."
-                    return $result
-                }
+            $hasPhysical = Test-PackagePhysicalPresence -Package $Package -RegistryMatch $match
+            if (-not $hasPhysical) {
+                $result.Status = "NOT_INSTALLED"
+                $result.InstalledVersion = "-"
+                $result.TargetVersion = "Terbaru"
+                $result.Details = "Residu Registry terdeteksi ($($match.DisplayName)), namun berkas fisik ($($Package.pathCheck)) tidak ditemukan di disk. Diperlukan instalasi bersih."
+                return $result
             }
         }
 

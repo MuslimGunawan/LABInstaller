@@ -1,7 +1,7 @@
 {
-  "version": "1.0.36",
+  "version": "1.0.37",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-21",
-  "description": "v1.0.36: Penyelarasan komprehensif seluruh unduhan ke folder apps/: eliminasi total penghapusan di folder temporary (Composer-Setup.exe, composer.phar, laragon-wamp.exe, platform-tools.zip, dan commandlinetools.zip kini 100% tersimpan permanen di folder apps/); serta perluasan deteksi multi-pattern cache lokal di folder apps/ untuk XAMPP, Laragon, dan software lainnya."
+  "description": "v1.0.37: Perbaikan komprehensif false-negative deteksi IDE & proteksi biner installer. (1) Detector kini mengenali Apache NetBeans & Arduino IDE via pintasan desktop, Start Menu, DisplayIcon, uninstall string, dan variasi Program Files (x86) sehingga tidak lagi salah dideteksi NOT_INSTALLED dan tidak ditimpa; (2) Validasi PE/ZIP/MSI header pada installer lokal untuk mengeliminasi residu HTML/korup di folder apps/; (3) Header Wget pada pengunduhan langsung vendor (SourceForge) agar biner XAMPP 157 MB terunduh langsung tanpa tersangkut di halaman web countdown; (4) Transparansi konfirmasi Clean Purge bahwa pembersihan hanya untuk web server & database, bukan IDE."
 }
