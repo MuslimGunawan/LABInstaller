@@ -1288,6 +1288,15 @@ function Configure-AllPhpExtensions {
         $matched = Resolve-Path -Path $cr -ErrorAction SilentlyContinue
         foreach ($m in $matched) {
             $pIni = Join-Path -Path $m.Path -ChildPath "php.ini"
+            if (-not (Test-Path -Path $pIni)) {
+                $pDev = Join-Path -Path $m.Path -ChildPath "php.ini-development"
+                $pProd = Join-Path -Path $m.Path -ChildPath "php.ini-production"
+                if (Test-Path -Path $pDev) {
+                    Copy-Item -Path $pDev -Destination $pIni -Force -ErrorAction SilentlyContinue
+                } elseif (Test-Path -Path $pProd) {
+                    Copy-Item -Path $pProd -Destination $pIni -Force -ErrorAction SilentlyContinue
+                }
+            }
             if (Test-Path -Path $pIni) {
                 $targetIniFiles += $pIni
             }

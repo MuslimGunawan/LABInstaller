@@ -303,10 +303,13 @@ function Invoke-PackageInstall {
     if (-not $localCacheFile) {
         # Cari file alternatif di folder apps yang cocok dengan nama paket / pattern installer (misal hasil unduhan WinGet)
         $matchedFile = Get-ChildItem -Path $appsDir -Filter "*.$pkgType" -ErrorAction SilentlyContinue | Where-Object {
-            (Test-ValidInstallerFile -FilePath $_.FullName -ExpectedType $pkgType -MinSizeBytes $minExpectedSize) -and (
+            (Test-ValidInstallerFile -FilePath $_.FullName -ExpectedType $pkgType -MinSizeBytes $minExpectedSize) -and
+            # Cegah salah pencocokan fatal: phpMyAdmin BUKAN runtime PHP!
+            (-not ($Package.id -like "PHP.*" -and $_.Name -match '(?i)phpmyadmin')) -and (
                 ($targetFileName -and $_.Name -like "*$($targetFileName -replace '\.[^.]+$','')*") -or
-                ($Package.id -and $_.Name -like "*$($Package.id.Split('.')[-1])*") -or
-                ($Package.name -and $_.Name -like "*$($Package.name.Split(' ')[0])*")
+                ($Package.id -like "PHP.*" -and $_.Name -match '^php-8\.') -or
+                ($Package.id -and ($Package.id -notlike "PHP.*") -and $_.Name -like "*$($Package.id.Split('.')[-1])*") -or
+                ($Package.name -and ($Package.name -notmatch '(?i)^php\b') -and $_.Name -like "*$($Package.name -replace '\s+','*')*")
             )
         } | Select-Object -First 1
 
@@ -526,6 +529,30 @@ function Install-LocalFilePackage {
             $destDir = if ($Package.extractDir) { $Package.extractDir } else { "C:\tools\$($Package.id)" }
             Write-LogInfo "Mengekstrak paket ZIP ke $destDir..."
             Expand-Archive -Path $FilePath -DestinationPath $destDir -Force
+
+            # Validasi integritas ekstraksi: Jika paket memiliki pathCheck (misal C:\tools\php85\php.exe),
+            # pastikan binari target benar-benar ada di dalam hasil ekstraksi!
+            if ($Package.pathCheck) {
+                $expectedBinName = [System.IO.Path]::GetFileName($Package.pathCheck -replace '\*', '')
+                $hasBin = Test-Path -Path (Join-Path -Path $destDir -ChildPath $expectedBinName)
+                if (-not $hasBin) {
+                    $foundNested = Get-ChildItem -Path $destDir -Recurse -Filter $expectedBinName -ErrorAction SilentlyContinue | Select-Object -First 1
+                    if ($foundNested) {
+                        # Jika binari berada dalam subfolder (misal php-8.5.10-Win32/php.exe), ratakan ke $destDir
+                        $subFolder = $foundNested.DirectoryName
+                        Get-ChildItem -Path $subFolder | Move-Item -Destination $destDir -Force -ErrorAction SilentlyContinue
+                        $hasBin = Test-Path -Path (Join-Path -Path $destDir -ChildPath $expectedBinName)
+                    }
+                }
+
+                if (-not $hasBin) {
+                    Write-LogError "Validasi ekstraksi GAGAL: Berkas arsip '$FilePath' tidak memuat binari '$expectedBinName' untuk $($Package.name)!"
+                    Write-LogWarning "Berkas di cache salah/tidak valid. Membersihkan folder tujuan $destDir..."
+                    Remove-Item -Path $destDir -Recurse -Force -ErrorAction SilentlyContinue
+                    return $false
+                }
+            }
+
             Add-DirectoryToPath -PathToAdd $destDir -Scope "Machine" | Out-Null
             Write-LogSuccess "$pkgName berhasil diekstrak dan didaftarkan ke sistem PATH."
             Refresh-CurrentSessionEnvironment

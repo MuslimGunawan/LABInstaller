@@ -1,7 +1,7 @@
 {
-  "version": "1.0.42",
+  "version": "1.0.43",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-21",
-  "description": "v1.0.42: Otomatisasi Hak Akses 'Run As Administrator' untuk Laragon & XAMPP. (1) Menjamin Laragon (laragon.exe) dan XAMPP (xampp-control.exe / xampp_start.exe) selalu berjalan dengan hak akses Administrator baik dibuka melalui Desktop shortcut, Start Menu, maupun File Explorer secara langsung via Windows Registry AppCompatFlags (Layers ~ RUNASADMIN) dan flag biner pintasan (byte 21 0x20); (2) Menghilangkan pemanggilan aktivasi liar di Start-FullEnvironmentConfiguration sehingga aktivasi 100% konsisten hanya di Menu [5]."
+  "description": "v1.0.43: Perbaikan Kritis Cache Matching PHP 8.5 vs phpMyAdmin & Self-Healing Runtime PHP. (1) Memperbaiki kesalahan pencocokan cache lokal di folder apps di mana PHP 8.5 keliru mencocokkan phpMyAdmin-5.2.1-all-languages.zip; (2) Menambahkan validasi integritas pasca-ekstraksi ZIP (pathCheck verification) agar arsip yang salah/korup langsung ditolak dan dialihkan mengunduh PHP 8.5 resmi dari php.net; (3) Self-healing otomatis jika C:\\tools\\php85 tidak memuat php.exe; (4) Pembuatan otomatis php.ini dari php.ini-development dan perbaikan verifikasi eksekusi Composer / Laravel Installer."
 }

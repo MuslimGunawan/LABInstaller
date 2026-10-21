@@ -170,6 +170,14 @@ function Setup-PhpEnvironment {
     Write-LogStep "Mengonfigurasi environment PHP 8.5 & php.ini..."
     Refresh-CurrentSessionEnvironment
 
+    $phpToolsDir = "C:\tools\php85"
+    if (Test-Path -Path $phpToolsDir) {
+        if (-not (Test-Path -Path (Join-Path -Path $phpToolsDir -ChildPath "php.exe"))) {
+            Write-LogWarning "Direktori $phpToolsDir terdeteksi tidak memiliki php.exe (residu salah ekstrak). Membersihkan folder..."
+            Remove-Item -Path $phpToolsDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     $phpCandidates = @(
         "C:\tools\php85\php.exe",
         "C:\php\php.exe",
@@ -190,6 +198,34 @@ function Setup-PhpEnvironment {
                 $phpDir = Split-Path -Parent $matched.Path
                 break
             }
+        }
+    }
+
+    # Jika PHP belum ditemukan (misal gagal ekstrak di tahap awal), lakukan pemulihan mandiri resmi
+    if (-not $phpDir) {
+        Write-LogInfo "PHP belum terdeteksi. Mengunduh paket resmi PHP 8.5 langsung dari server php.net..."
+        $phpUrl = "https://downloads.php.net/~windows/releases/archives/php-8.5.10-Win32-vs17-x64.zip"
+        $appsDir = Get-AppStorageDirectory
+        $phpZip = Join-Path -Path $appsDir -ChildPath "php-8.5.10-Win32-vs17-x64.zip"
+        try {
+            if (-not (Test-Path -Path $phpZip) -or (Get-Item -Path $phpZip).Length -lt 20000000) {
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                $wc = New-Object System.Net.WebClient
+                $wc.Headers.Add("User-Agent", "LABInstaller")
+                $wc.DownloadFile($phpUrl, $phpZip)
+            }
+            if (Test-Path -Path $phpZip) {
+                if (-not (Test-Path -Path $phpToolsDir)) { New-Item -ItemType Directory -Path $phpToolsDir -Force | Out-Null }
+                Expand-Archive -Path $phpZip -DestinationPath $phpToolsDir -Force
+                if (Test-Path -Path (Join-Path -Path $phpToolsDir -ChildPath "php.exe")) {
+                    $phpDir = $phpToolsDir
+                    Add-DirectoryToPath -PathToAdd $phpDir -Scope "Machine" | Out-Null
+                    $env:Path = "$phpDir;$env:Path"
+                    Write-LogSuccess "PHP 8.5 resmi berhasil dipulihkan & dipasang di $phpToolsDir!"
+                }
+            }
+        } catch {
+            Write-LogWarning "Gagal mengunduh otomatis PHP 8.5 dari php.net: $_"
         }
     }
 
@@ -377,8 +413,14 @@ function Install-LaravelInstallerOfficial {
         }
 
         Refresh-CurrentSessionEnvironment
-        Write-LogSuccess "Laravel Installer berhasil diinstal (laravel new ... siap digunakan)."
-        return $true
+        $laravelBat = Join-Path -Path $composerGlobalBin -ChildPath "laravel.bat"
+        if ($process.ExitCode -eq 0 -or (Test-Path -Path $laravelBat)) {
+            Write-LogSuccess "Laravel Installer berhasil diinstal (laravel new ... siap digunakan)."
+            return $true
+        } else {
+            Write-LogWarning "Pemasangan Laravel Installer via Composer keluar dengan kode: $($process.ExitCode)"
+            return $false
+        }
     }
     catch {
         Write-LogError "Gagal menginstal Laravel Installer - $_"
