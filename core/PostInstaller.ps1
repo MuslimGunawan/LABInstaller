@@ -899,6 +899,9 @@ function Setup-LaragonEnvironment {
             $shortcut.Save()
             Write-LogSuccess "Shortcut Laragon dibuat di Desktop."
         }
+        if (Get-Command Set-AppRunAsAdmin -ErrorAction SilentlyContinue) {
+            Set-AppRunAsAdmin -ExecutablePaths @("C:\laragon\laragon.exe")
+        }
     } catch {}
 }
 
@@ -906,6 +909,9 @@ function Setup-XamppEnvironment {
     Write-LogStep "Menyiapkan integrasi XAMPP & pencegahan bentrok port dengan Laragon..."
     if (Get-Command Configure-WebServerPorts -ErrorAction SilentlyContinue) {
         Configure-WebServerPorts
+    }
+    if (Get-Command Set-AppRunAsAdmin -ErrorAction SilentlyContinue) {
+        Set-AppRunAsAdmin -ExecutablePaths @("C:\xampp\xampp-control.exe", "C:\xampp\xampp_start.exe")
     }
 }
 

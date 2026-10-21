@@ -1,7 +1,7 @@
 {
-  "version": "1.0.41",
+  "version": "1.0.42",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-21",
-  "description": "v1.0.41: Optimasi Hemat Kuota Disk pada Modul Updater & Penataan Berkas Installer. (1) Memperbaiki error 'There is not enough space on the disk' saat menjalankan Menu [4] Update dengan membatasi backup HANYA pada modul sistem (core, manifests, ui, system, activator, script root) dan mengecualikan folder apps serta berkas zip/exe raksasa; (2) Otomatis membersihkan folder .backup usang dan merapikan installer liar di root direktori ke folder apps/; (3) Penyelarasan window title konsol agar selalu bersih dan profesional."
+  "description": "v1.0.42: Otomatisasi Hak Akses 'Run As Administrator' untuk Laragon & XAMPP. (1) Menjamin Laragon (laragon.exe) dan XAMPP (xampp-control.exe / xampp_start.exe) selalu berjalan dengan hak akses Administrator baik dibuka melalui Desktop shortcut, Start Menu, maupun File Explorer secara langsung via Windows Registry AppCompatFlags (Layers ~ RUNASADMIN) dan flag biner pintasan (byte 21 0x20); (2) Menghilangkan pemanggilan aktivasi liar di Start-FullEnvironmentConfiguration sehingga aktivasi 100% konsisten hanya di Menu [5]."
 }

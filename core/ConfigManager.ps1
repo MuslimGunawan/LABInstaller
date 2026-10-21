@@ -31,8 +31,8 @@ function Start-FullEnvironmentConfiguration {
     # 7. Konfigurasi Ekosistem Flutter & Android SDK (Bebas Error flutter doctor)
     Configure-FlutterAndAndroidEnvironment
 
-    # 8. Aktivasi Otomatis Microsoft Windows & Office (HWID & Ohook Permanen)
-    Invoke-WindowsAndOfficeActivation
+    # 8. Penyelarasan Hak Akses Administrator Permanen (Laragon & XAMPP)
+    Set-AppRunAsAdmin
 
     Write-LogSuccess "Semua konfigurasi port, firewall, shortcut desktop, dan environment berhasil diterapkan secara optimal!"
 }
@@ -818,6 +818,79 @@ function Set-SystemDefaultBrowser {
     }
 }
 
+function Set-AppRunAsAdmin {
+    param (
+        [string[]]$ExecutablePaths = @(
+            "C:\laragon\laragon.exe",
+            "D:\laragon\laragon.exe",
+            "C:\xampp\xampp-control.exe",
+            "D:\xampp\xampp-control.exe",
+            "C:\xampp\xampp_start.exe",
+            "D:\xampp\xampp_start.exe"
+        )
+    )
+
+    Write-LogStep "Mengonfigurasi Hak Administrator Permanen (Run As Administrator) untuk Laragon & XAMPP..."
+
+    $regPaths = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers",
+        "HKCU:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"
+    )
+
+    # 1. Terapkan flag ~ RUNASADMIN ke Registry Windows
+    # Menjamin aplikasi selalu berjalan sebagai Administrator saat dibuka dari mana pun (Start Menu, Desktop, Taskbar, Explorer, dll)
+    $appliedCount = 0
+    foreach ($exe in $ExecutablePaths) {
+        if (Test-Path -Path $exe) {
+            foreach ($rp in $regPaths) {
+                try {
+                    if (-not (Test-Path -Path $rp)) {
+                        New-Item -Path $rp -Force | Out-Null
+                    }
+                    Set-ItemProperty -Path $rp -Name $exe -Value "~ RUNASADMIN" -Force -ErrorAction SilentlyContinue | Out-Null
+                } catch {
+                    Write-LogWarning "Gagal mengatur registry RunAsAdmin untuk ${exe}: $_"
+                }
+            }
+            Write-LogSuccess "Hak Run As Administrator permanen diterapkan di Registry untuk: $exe"
+            $appliedCount++
+        }
+    }
+
+    # 2. Penyelarasan Flag RunAsAdmin (Byte 21 = 0x20) pada Seluruh File Pintasan (.lnk)
+    # Berlaku di Desktop Publik, Desktop Pengguna, Start Menu Publik, & Start Menu Pengguna
+    $shortcutDirs = @(
+        [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonDesktopDirectory),
+        [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop),
+        [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonPrograms),
+        [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Programs)
+    )
+
+    $wshShell = New-Object -ComObject WScript.Shell
+    foreach ($dir in $shortcutDirs) {
+        if ($dir -and (Test-Path -Path $dir)) {
+            $lnks = Get-ChildItem -Path $dir -Filter "*.lnk" -Recurse -ErrorAction SilentlyContinue | Where-Object {
+                $_.Name -match '(?i)(laragon|xampp)'
+            }
+            foreach ($lnk in $lnks) {
+                try {
+                    $bytes = [System.IO.File]::ReadAllBytes($lnk.FullName)
+                    if ($bytes.Length -gt 21) {
+                        # Terapkan bit 5 (0x20) pada byte 21 (LinkFlags -> SLDF_RUNAS_USER)
+                        $bytes[21] = [byte]($bytes[21] -bor 0x20)
+                        [System.IO.File]::WriteAllBytes($lnk.FullName, $bytes)
+                        Write-LogSuccess "Pintasan '$($lnk.Name)' dikonfigurasi Run As Administrator (Desktop / Start Menu)."
+                    }
+                } catch {}
+            }
+        }
+    }
+
+    if ($appliedCount -gt 0) {
+        Write-LogSuccess "Laragon & XAMPP berhasil disetel agar selalu berjalan sebagai Administrator di Desktop maupun Start Menu!"
+    }
+}
+
 function Configure-WebServerPorts {
     Write-LogStep "Memeriksa & Mengisolasi Port Web Server (Laragon vs XAMPP)..."
 
@@ -1173,6 +1246,9 @@ server {
             Write-LogSuccess "phpMyAdmin Laragon berhasil dioptimasi: Multi-Host, Langsung terbuka tanpa login & bebas warning!"
         }
     }
+
+    # 5. Terapkan Hak Akses Run As Administrator Otomatis (Desktop, Start Menu, & Explorer)
+    Set-AppRunAsAdmin
 
     Write-Host ""
     Write-Host "====================== SKEMA PEMBAGIAN PORT & ADMIN ======================" -ForegroundColor Cyan
@@ -1702,6 +1778,9 @@ function Ensure-DesktopShortcuts {
         if ($cleanedDuplicates -eq 0 -and $createdCount -eq 0) {
             Write-LogInfo "Seluruh shortcut desktop aplikasi sudah rapi & tunggal (tidak ada duplikat)."
         }
+
+        # Pastikan shortcut dan aplikasi web server (Laragon & XAMPP) disetel Run As Administrator
+        Set-AppRunAsAdmin
     }
     catch {
         Write-LogWarning "Pemeriksaan shortcut desktop mengalami kendala: $_"

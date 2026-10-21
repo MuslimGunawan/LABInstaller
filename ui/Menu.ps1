@@ -309,6 +309,7 @@ function Start-WebServerOnlyFreshInstall {
     Write-Host "   - Laragon phpMyAdmin : http://localhost/phpmyadmin/ (Auto-Login Root)" -ForegroundColor Green
     Write-Host "   - XAMPP Web Server   : http://localhost:8080/ (Port 8080)" -ForegroundColor Yellow
     Write-Host "   - XAMPP phpMyAdmin   : http://localhost:8080/phpmyadmin/ (Port 3307)" -ForegroundColor Yellow
+    Write-Host "   - Hak Akses Aplikasi : Run As Administrator Permanen (Desktop & Start Menu)" -ForegroundColor Green
     Write-Host "================================================================================" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Tekan Enter untuk kembali ke menu utama..." -ForegroundColor Gray
