@@ -1876,13 +1876,18 @@ function Configure-FlutterAndAndroidEnvironment {
     $adbPath = Join-Path -Path $sdkDir -ChildPath "platform-tools\adb.exe"
     if (-not (Test-Path -Path $adbPath)) {
         Write-LogInfo "Mengunduh platform-tools (adb) resmi Google untuk melengkapi Android SDK..."
-        $ptZip = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "platform-tools.zip"
+        $appsDir = if (Get-Command Get-AppStorageDirectory -ErrorAction SilentlyContinue) { Get-AppStorageDirectory } else { "d:\KP\v2\apps" }
+        $ptZip = Join-Path -Path $appsDir -ChildPath "platform-tools.zip"
         try {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            (New-Object Net.WebClient).DownloadFile("https://dl.google.com/android/repository/platform-tools-latest-windows.zip", $ptZip)
+            if (-not (Test-Path -Path $ptZip) -or ((Get-Item $ptZip).Length -lt 1000000)) {
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                (New-Object Net.WebClient).DownloadFile("https://dl.google.com/android/repository/platform-tools-latest-windows.zip", $ptZip)
+                Write-LogSuccess "platform-tools.zip berhasil disimpan permanen di folder apps!"
+            } else {
+                Write-LogSuccess "Berkas platform-tools.zip sudah tersedia di folder apps: $ptZip"
+            }
             if (Test-Path -Path $ptZip) {
                 Expand-Archive -Path $ptZip -DestinationPath $sdkDir -Force
-                Remove-Item -Path $ptZip -Force -ErrorAction SilentlyContinue
                 Write-LogSuccess "Platform-tools (adb.exe) berhasil dipasang ke $sdkDir\platform-tools"
             }
         } catch {
@@ -1905,11 +1910,17 @@ function Configure-FlutterAndAndroidEnvironment {
     $cmdlineBat = Join-Path -Path $sdkDir -ChildPath "cmdline-tools\latest\bin\sdkmanager.bat"
     if (-not (Test-Path -Path $cmdlineBat)) {
         Write-LogInfo "Mengunduh Android SDK Command-line Tools resmi Google (~140 MB)..."
-        $cmdlineZip = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "commandlinetools.zip"
+        $appsDir = if (Get-Command Get-AppStorageDirectory -ErrorAction SilentlyContinue) { Get-AppStorageDirectory } else { "d:\KP\v2\apps" }
+        $cmdlineZip = Join-Path -Path $appsDir -ChildPath "commandlinetools.zip"
         $cmdlineTempExtract = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "cmdline_extract"
         try {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            (New-Object Net.WebClient).DownloadFile("https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip", $cmdlineZip)
+            if (-not (Test-Path -Path $cmdlineZip) -or ((Get-Item $cmdlineZip).Length -lt 10000000)) {
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                (New-Object Net.WebClient).DownloadFile("https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip", $cmdlineZip)
+                Write-LogSuccess "commandlinetools.zip berhasil disimpan permanen di folder apps!"
+            } else {
+                Write-LogSuccess "Berkas commandlinetools.zip sudah tersedia di folder apps: $cmdlineZip"
+            }
             if (Test-Path -Path $cmdlineZip) {
                 Write-LogInfo "Mengekstrak Android SDK Command-line Tools..."
                 $sevenZip = "C:\Program Files\7-Zip\7z.exe"
@@ -1934,7 +1945,7 @@ function Configure-FlutterAndAndroidEnvironment {
                     Write-LogSuccess "Android SDK Command-line Tools (sdkmanager) berhasil dipasang ke $targetLatest!"
                 }
 
-                Remove-Item -Path $cmdlineZip, $cmdlineTempExtract -Recurse -Force -ErrorAction SilentlyContinue
+                Remove-Item -Path $cmdlineTempExtract -Recurse -Force -ErrorAction SilentlyContinue
             }
         } catch {
             Write-LogWarning "Gagal mengunduh cmdline-tools otomatis: $_"

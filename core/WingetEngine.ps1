@@ -222,18 +222,39 @@ function Invoke-PackageInstall {
     # 1b. Jalur Local Cache Folder apps (Jika file installer fisik sudah ada di apps/ atau direktori proyek)
     $appsDir = Get-AppStorageDirectory
     $targetFileName = if ($Package.fileName) { $Package.fileName } else { "" }
+    $localCacheFile = $null
+
     if ($targetFileName) {
-        $localCacheFile = Join-Path -Path $appsDir -ChildPath $targetFileName
-        if ((Test-Path -Path $localCacheFile) -and ((Get-Item -Path $localCacheFile).Length -gt 100000)) {
-            $mb = [math]::Round((Get-Item -Path $localCacheFile).Length / 1MB, 2)
-            Write-LogSuccess "Berkas installer $pkgName sudah tersedia di folder apps (Cache Lokal): $localCacheFile ($mb MB)."
-            Write-LogInfo "Menjalankan instalasi offline dari folder apps tanpa mengunduh ulang..."
-            $installed = Install-LocalFilePackage -Package $Package -FilePath $localCacheFile
-            if ($installed) {
-                return $true
-            }
-            Write-LogWarning "Instalasi dari berkas lokal di folder apps gagal. Beralih ke metode pengunduhan berikutnya..."
+        $exactPath = Join-Path -Path $appsDir -ChildPath $targetFileName
+        if ((Test-Path -Path $exactPath) -and ((Get-Item -Path $exactPath).Length -gt 100000)) {
+            $localCacheFile = $exactPath
         }
+    }
+
+    if (-not $localCacheFile) {
+        # Cari file alternatif di folder apps yang cocok dengan nama paket / pattern installer (misal hasil unduhan WinGet)
+        $matchedFile = Get-ChildItem -Path $appsDir -Filter "*.exe" -ErrorAction SilentlyContinue | Where-Object {
+            $_.Length -gt 100000 -and (
+                ($targetFileName -and $_.Name -like "*$($targetFileName -replace '\.exe','')*") -or
+                ($Package.id -and $_.Name -like "*$($Package.id.Split('.')[-1])*") -or
+                ($Package.name -and $_.Name -like "*$($Package.name.Split(' ')[0])*")
+            )
+        } | Select-Object -First 1
+
+        if ($matchedFile) {
+            $localCacheFile = $matchedFile.FullName
+        }
+    }
+
+    if ($localCacheFile -and (Test-Path -Path $localCacheFile)) {
+        $mb = [math]::Round((Get-Item -Path $localCacheFile).Length / 1MB, 2)
+        Write-LogSuccess "Berkas installer $pkgName ditemukan di folder apps (Cache Lokal): $localCacheFile ($mb MB)."
+        Write-LogInfo "Menjalankan instalasi offline dari folder apps tanpa mengunduh ulang..."
+        $installed = Install-LocalFilePackage -Package $Package -FilePath $localCacheFile
+        if ($installed) {
+            return $true
+        }
+        Write-LogWarning "Instalasi dari berkas lokal di folder apps gagal. Beralih ke metode pengunduhan berikutnya..."
     }
 
     # 2. Jalur Google Drive Mirror (Prioritas Utama Pengguna: Cepat & Hemat Kuota)

@@ -1,7 +1,7 @@
 {
-  "version": "1.0.35",
+  "version": "1.0.36",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-21",
-  "description": "v1.0.35: Penyempurnaan offline cache: Laragon resmi (laragon-wamp.exe) & Laragon Custom (Laragon_Custom_LAB.zip) kini otomatis tersimpan permanen di folder apps/; penambahan Jalur 1b Prioritas Cache Offline Lokal untuk seluruh paket (XAMPP, Git, VSCode, dsb) sehingga jika file ada di folder apps/ langsung dipasang secara instan tanpa menyentuh internet."
+  "description": "v1.0.36: Penyelarasan komprehensif seluruh unduhan ke folder apps/: eliminasi total penghapusan di folder temporary (Composer-Setup.exe, composer.phar, laragon-wamp.exe, platform-tools.zip, dan commandlinetools.zip kini 100% tersimpan permanen di folder apps/); serta perluasan deteksi multi-pattern cache lokal di folder apps/ untuk XAMPP, Laragon, dan software lainnya."
 }

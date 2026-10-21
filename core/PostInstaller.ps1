@@ -234,14 +234,20 @@ function Install-ComposerOfficial {
         Configure-AllPhpExtensions
     }
 
-    $tempDir = [System.IO.Path]::GetTempPath()
-    $installerPath = Join-Path -Path $tempDir -ChildPath "Composer-Setup.exe"
+    $appsDir = Get-AppStorageDirectory
+    $installerPath = Join-Path -Path $appsDir -ChildPath "Composer-Setup.exe"
     $composerUrl = "https://getcomposer.org/Composer-Setup.exe"
 
     try {
-        Write-LogInfo "Mengunduh installer dari: $composerUrl"
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        (New-Object System.Net.WebClient).DownloadFile($composerUrl, $installerPath)
+        if ((Test-Path -Path $installerPath) -and ((Get-Item -Path $installerPath).Length -gt 100000)) {
+            $mb = [math]::Round((Get-Item -Path $installerPath).Length / 1MB, 2)
+            Write-LogSuccess "Berkas installer Composer sudah tersedia di folder apps: $installerPath ($mb MB)."
+        } else {
+            Write-LogInfo "Mengunduh installer resmi Composer dari: $composerUrl ke folder apps..."
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            (New-Object System.Net.WebClient).DownloadFile($composerUrl, $installerPath)
+            Write-LogSuccess "Composer-Setup.exe berhasil diunduh dan disimpan permanen di folder apps!"
+        }
 
         # Cari path php.exe spesifik untuk dikaitkan ke Composer-Setup (Prioritaskan PHP 8.5)
         $phpForComposer = $null
@@ -291,9 +297,18 @@ function Install-ComposerOfficial {
                 New-Item -Path $composerBin -ItemType Directory -Force | Out-Null
             }
             $pharPath = Join-Path -Path $composerBin -ChildPath "composer.phar"
+            $pharBackup = Join-Path -Path $appsDir -ChildPath "composer.phar"
             $pharUrl = "https://getcomposer.org/composer.phar"
-            Write-LogInfo "Mengunduh binary resmi composer.phar dari: $pharUrl"
-            (New-Object System.Net.WebClient).DownloadFile($pharUrl, $pharPath)
+
+            if ((Test-Path -Path $pharBackup) -and ((Get-Item -Path $pharBackup).Length -gt 1000000)) {
+                Write-LogSuccess "Binary resmi composer.phar sudah tersedia di folder apps: $pharBackup"
+                Copy-Item -Path $pharBackup -Destination $pharPath -Force
+            } else {
+                Write-LogInfo "Mengunduh binary resmi composer.phar dari: $pharUrl ke folder apps..."
+                (New-Object System.Net.WebClient).DownloadFile($pharUrl, $pharBackup)
+                Copy-Item -Path $pharBackup -Destination $pharPath -Force
+                Write-LogSuccess "composer.phar berhasil disimpan permanen di folder apps!"
+            }
 
             if (Test-Path -Path $pharPath) {
                 $phpTarget = if ($phpForComposer -and (Test-Path -Path $phpForComposer)) { $phpForComposer } else { "php" }
@@ -329,11 +344,6 @@ function Install-ComposerOfficial {
     catch {
         Write-LogError "Gagal menginstal Composer - $_"
         return $false
-    }
-    finally {
-        if (Test-Path -Path $installerPath) {
-            Remove-Item -Path $installerPath -Force -ErrorAction SilentlyContinue
-        }
     }
 }
 
