@@ -806,10 +806,41 @@ Alias /phpmyadmin "C:/laragon/etc/apps/phpMyAdmin/"
 `$cfg['blowfish_secret'] = 'vK8mQ2xL9pZ4wR7tY1uI3oE5aA6sD8fG';
 
 `$i = 0;
+
+/* Server 1: Laragon MySQL (127.0.0.1:3306) */
 `$i++;
+`$cfg['Servers'][`$i]['verbose'] = 'Laragon MySQL (127.0.0.1)';
 `$cfg['Servers'][`$i]['auth_type'] = 'config';
 `$cfg['Servers'][`$i]['host'] = '127.0.0.1';
 `$cfg['Servers'][`$i]['port'] = '3306';
+`$cfg['Servers'][`$i]['connect_type'] = 'tcp';
+`$cfg['Servers'][`$i]['extension'] = 'mysqli';
+`$cfg['Servers'][`$i]['user'] = 'root';
+`$cfg['Servers'][`$i]['password'] = '';
+`$cfg['Servers'][`$i]['AllowNoPassword'] = true;
+`$cfg['Servers'][`$i]['Compress'] = false;
+
+/* Server 2: Laragon MySQL (localhost:3306) */
+`$i++;
+`$cfg['Servers'][`$i]['verbose'] = 'Laragon MySQL (localhost)';
+`$cfg['Servers'][`$i]['auth_type'] = 'config';
+`$cfg['Servers'][`$i]['host'] = 'localhost';
+`$cfg['Servers'][`$i]['port'] = '3306';
+`$cfg['Servers'][`$i]['connect_type'] = 'tcp';
+`$cfg['Servers'][`$i]['extension'] = 'mysqli';
+`$cfg['Servers'][`$i]['user'] = 'root';
+`$cfg['Servers'][`$i]['password'] = '';
+`$cfg['Servers'][`$i]['AllowNoPassword'] = true;
+`$cfg['Servers'][`$i]['Compress'] = false;
+
+/* Server 3: XAMPP MariaDB/MySQL (Port 3307) */
+`$i++;
+`$cfg['Servers'][`$i]['verbose'] = 'XAMPP MySQL (Port 3307)';
+`$cfg['Servers'][`$i]['auth_type'] = 'config';
+`$cfg['Servers'][`$i]['host'] = '127.0.0.1';
+`$cfg['Servers'][`$i]['port'] = '3307';
+`$cfg['Servers'][`$i]['connect_type'] = 'tcp';
+`$cfg['Servers'][`$i]['extension'] = 'mysqli';
 `$cfg['Servers'][`$i]['user'] = 'root';
 `$cfg['Servers'][`$i]['password'] = '';
 `$cfg['Servers'][`$i]['AllowNoPassword'] = true;
@@ -1377,13 +1408,10 @@ function Setup-OfficePostInstall {
         Ensure-DesktopShortcuts
     }
 
-    # 3. Jalankan Aktivasi Permanen Otomatis via Ohook
-    Write-LogStep "Menjalankan Aktivasi Otomatis Microsoft Office (Ohook Permanen)..."
-    if (Get-Command Invoke-WindowsAndOfficeActivation -ErrorAction SilentlyContinue) {
-        Invoke-WindowsAndOfficeActivation -Force
-    }
+    # 3. Informasikan Aktivasi Khusus (Menu 5)
+    Write-LogInfo "Instalasi Microsoft Office selesai. Untuk aktivasi permanen (Ohook), silakan gunakan Menu [5] khusus Aktivasi."
 
-    Write-LogSuccess "Konfigurasi dan Aktivasi Microsoft 365 (Office) selesai!"
+    Write-LogSuccess "Instalasi & penyelarasan shortcut Microsoft 365 (Office) selesai!"
     return $true
 }
 

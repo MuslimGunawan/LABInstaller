@@ -1,7 +1,7 @@
 {
-  "version": "1.0.39",
+  "version": "1.0.40",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-21",
-  "description": "v1.0.39: Fitur Khusus Web Server & Integrasi phpMyAdmin Otomatis. (1) Menu baru [8] Khusus Web Server: Fresh Install tuntas Laragon 6.0 + XAMPP 8.2 + phpMyAdmin tanpa menyentuh software lain; (2) Pemasangan otomatis phpMyAdmin 5.2.1 resmi ke C:\\laragon\\etc\\apps\\phpMyAdmin dengan konfigurasi Auto-Login Root bebas password & zero-warning; (3) Tombol 'Database' pada antarmuka Laragon disetel membuka phpMyAdmin otomatis di browser alih-alih HeidiSQL; (4) Penyelarasan isolasi port Apache 80/8080 dan MySQL 3306/3307."
+  "description": "v1.0.40: Perbaikan Uninstaller XAMPP Tanpa CMD Popup, Solusi Koneksi phpMyAdmin Laragon Multi-Host & Pemisahan Total Aktivasi Windows/Office ke Menu [5]. (1) Menghilangkan 2 jendela cmd.exe yang muncul saat uninstall XAMPP dengan pembersihan otomatis murni tanpa uninstaller interaktif Bitnami; (2) Mengatasi error HY000/2002 'target machine actively refused it' pada phpMyAdmin Laragon dengan bind-address 0.0.0.0 di my.ini, aktivasi otomatis [mysql] Use=-1 di laragon.ini, dan konfigurasi multi-host (127.0.0.1, localhost, & XAMPP 3307); (3) Pemisahan aktivasi Windows & Office secara murni ke Menu [5] tanpa otomatisasi di Menu [1] maupun post-install."
 }

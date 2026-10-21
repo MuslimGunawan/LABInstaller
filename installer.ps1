@@ -155,11 +155,11 @@ while ($true) {
     Show-LabBanner -Version $currentVersion
 
     Write-Host "  PILIHAN MENU UTAMA:" -ForegroundColor Yellow
-    Write-Host "  [1] Mulai Instalasi Pintar (Auto Scan, Install, Config & Auto Activate)" -ForegroundColor Green
+    Write-Host "  [1] Mulai Instalasi Pintar (Auto Scan, Install, & Isolasi Port)" -ForegroundColor Green
     Write-Host "  [2] Pindai Cepat Status Software Saja (Fast Scan)" -ForegroundColor Cyan
     Write-Host "  [3] Konfigurasi Port, Firewall & Ekosistem Lab (Flutter, Android, Delphi)" -ForegroundColor Yellow
     Write-Host "  [4] Periksa Pembaruan Sistem & Double Verification (GitHub)" -ForegroundColor Magenta
-    Write-Host "  [5] Aktivasi Otomatis Microsoft Windows & Office (HWID & Ohook)" -ForegroundColor Green
+    Write-Host "  [5] Aktivasi Microsoft Windows & Office Khusus (HWID & Ohook)" -ForegroundColor Green
     Write-Host "  [6] Buka Folder Log Aktivitas" -ForegroundColor White
     Write-Host "  [7] Clean Reset & Fresh Purge (Hapus Total Residu PHP, Laragon, XAMPP & Service)" -ForegroundColor Red
     Write-Host "  [8] Khusus Web Server: Fresh Install & Port Isolation (Laragon + XAMPP + phpMyAdmin)" -ForegroundColor Cyan

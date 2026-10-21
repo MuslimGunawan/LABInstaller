@@ -222,7 +222,7 @@
     "installType": "exe",
     "fileName": "OfficeSetup.exe",
     "postInstallHandler": "Setup-OfficePostInstall",
-    "description": "Paket aplikasi perkantoran resmi Microsoft 365 (Word, Excel, PowerPoint) dengan instalasi online Click-to-Run dan aktivasi permanen otomatis via Ohook."
+    "description": "Paket aplikasi perkantoran resmi Microsoft 365 (Word, Excel, PowerPoint) dengan instalasi online Click-to-Run (Aktivasi tersedia terpisah di Menu 5)."
   }
 ]
 

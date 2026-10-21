@@ -503,11 +503,9 @@ function Invoke-CleanPurgeLegacyLabStack {
         Start-Process -FilePath "C:\laragon\unins000.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
         Start-Sleep -Seconds 1
     }
-    if (Test-Path -Path "C:\xampp\uninstall.exe") {
-        Write-LogInfo "Menjalankan uninstaller resmi XAMPP..."
-        Start-Process -FilePath "C:\xampp\uninstall.exe" -ArgumentList "--mode unattended" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
-        Start-Sleep -Seconds 1
-    }
+    # Catatan: C:\xampp\uninstall.exe (Bitnami) TIDAK dipanggil karena memicu 2 jendela cmd.exe interaktif
+    # yang menuntut penutupan manual oleh pengguna. Pembersihan total XAMPP dilakukan 100% otomatis,
+    # senyap & tuntas via taskkill, sc delete service, registry purge, dan penghapusan direktori di bawah ini.
 
     # Pastikan proses terkunci mati kembali
     cmd.exe /c "taskkill /F /T /IM laragon* /IM mysqld* /IM mariadbd* /IM httpd* /IM nginx* /IM php* /IM xampp* 2>nul" | Out-Null
@@ -1042,38 +1040,137 @@ server {
             Write-LogWarning "Gagal memperbarui konfigurasi Nginx 00-default.conf: $_"
         }
 
-        # 3. Optimasi phpMyAdmin Laragon (Auto-Login Root tanpa password & Bebas Warning)
-        Write-LogInfo "Menyesuaikan phpMyAdmin Laragon agar Auto-Login (tanpa login popup) & Bebas Warning..."
+        # 3. Selaraskan Konfigurasi MySQL Laragon (Port 3306, bind-address 0.0.0.0, ASCII Non-BOM)
+        Write-LogInfo "Menyelaraskan konfigurasi MySQL Laragon (Port 3306, bind-address 0.0.0.0)..."
+        $laragonMysqlCandidates = @(
+            (Join-Path -Path $laragonDir -ChildPath "bin\mysql\*")
+        )
+        foreach ($mc in $laragonMysqlCandidates) {
+            $dirs = Resolve-Path -Path $mc -ErrorAction SilentlyContinue
+            foreach ($d in $dirs) {
+                $lMyIni = Join-Path -Path $d.Path -ChildPath "my.ini"
+                if (Test-Path -Path $lMyIni) {
+                    $myText = Get-Content -Path $lMyIni -Raw
+                    $myText = $myText -replace 'port\s*=\s*\d+', 'port = 3306'
+
+                    # Pastikan bind-address 0.0.0.0 agar menerima koneksi localhost dan 127.0.0.1 tanpa ditolak (actively refused)
+                    if ($myText -match '(?m)^bind-address\s*=.*') {
+                        $myText = $myText -replace '(?m)^bind-address\s*=.*', 'bind-address = 0.0.0.0'
+                    } elseif ($myText -match '\[mysqld\]') {
+                        $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1bind-address = 0.0.0.0`r`ndefault_authentication_plugin = mysql_native_password`r`n"
+                    }
+
+                    if ($myText -notmatch 'default_authentication_plugin') {
+                        $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1default_authentication_plugin = mysql_native_password`r`n"
+                    }
+
+                    # Pastikan folder data sesuai yang ada di sistem
+                    $dataMysql8 = Join-Path -Path $laragonDir -ChildPath "data\mysql-8"
+                    $dataMysql  = Join-Path -Path $laragonDir -ChildPath "data\mysql"
+                    if (Test-Path -Path $dataMysql8) {
+                        $myText = $myText -replace 'datadir\s*=\s*.*', "datadir=`"C:/laragon/data/mysql-8`""
+                    } elseif (Test-Path -Path $dataMysql) {
+                        $myText = $myText -replace 'datadir\s*=\s*.*', "datadir=`"C:/laragon/data/mysql`""
+                    }
+
+                    [System.IO.File]::WriteAllText($lMyIni, $myText, [System.Text.Encoding]::ASCII)
+                    Write-LogSuccess "Konfigurasi MySQL Laragon ($lMyIni) diselaraskan (Port 3306, bind 0.0.0.0, ASCII Non-BOM)."
+                }
+            }
+        }
+
+        # Pastikan laragon.ini mengaktifkan modul MySQL (Use=-1 dan Port=3306)
+        if (Test-Path -Path $laragonIni) {
+            $lIniText = [System.IO.File]::ReadAllText($laragonIni, [System.Text.Encoding]::UTF8)
+            if ($lIniText -match '\[mysql\]') {
+                $lIniText = $lIniText -replace '(\[mysql\][^\[]*?Use\s*=\s*)-?\d+', '${1}-1'
+                if ($lIniText -match '\[mysql\][^\[]*Port\s*=\s*\d+') {
+                    $lIniText = $lIniText -replace '(\[mysql\][^\[]*?Port\s*=\s*)\d+', '${1}3306'
+                } else {
+                    $lIniText = $lIniText -replace '(\[mysql\]\r?\n)', "`$1Port=3306`r`n"
+                }
+            } else {
+                $lIniText += "`r`n[mysql]`r`nUse=-1`r`nPort=3306`r`n"
+            }
+            $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllText($laragonIni, $lIniText, $utf8NoBom)
+            Write-LogSuccess "Laragon INI diselaraskan: Modul MySQL dipastikan Aktif (Use=-1, Port=3306)."
+        }
+
+        # Cegah pembajakan service Windows: Jika service bernama 'mysql' membajak ke XAMPP, hapus agar Laragon memegang kendali
+        try {
+            $svcCheck = Get-CimInstance Win32_Service -Filter "Name='mysql'" -ErrorAction SilentlyContinue
+            if ($svcCheck -and $svcCheck.PathName -like "*xampp*") {
+                Write-LogInfo "Menghapus service Windows 'mysql' XAMPP yang membajak port default..."
+                Stop-Service -Name "mysql" -Force -ErrorAction SilentlyContinue
+                Start-Process -FilePath "sc.exe" -ArgumentList "delete `"mysql`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+            }
+        } catch {}
+
+        # 4. Optimasi phpMyAdmin Laragon (Auto-Login Root tanpa password & Multi-Host Resilient)
+        Write-LogInfo "Menyesuaikan phpMyAdmin Laragon agar Auto-Login (tanpa login popup) & Multi-Host..."
         if (Get-Command Install-LaragonPhpMyAdmin -ErrorAction SilentlyContinue) {
             Install-LaragonPhpMyAdmin -LaragonDir $laragonDir | Out-Null
         }
         $laragonPmaConfig = Join-Path -Path $laragonDir -ChildPath "etc\apps\phpMyAdmin\config.inc.php"
         if (Test-Path -Path $laragonPmaConfig) {
-            $lPmaText = Get-Content -Path $laragonPmaConfig -Raw
-            
-            # Ganti auth_type cookie menjadi config (seperti XAMPP tanpa popup login)
-            $lPmaText = $lPmaText -replace "\`$cfg\['Servers'\]\[\`$i\]\['auth_type'\]\s*=\s*'cookie';", @"
+            $cleanPmaContent = @"
+<?php
+/**
+ * phpMyAdmin Configuration - LABInstaller Auto-Login & Zero-Warning
+ */
+`$cfg['blowfish_secret'] = 'vK8mQ2xL9pZ4wR7tY1uI3oE5aA6sD8fG';
+
+`$i = 0;
+
+/* Server 1: Laragon MySQL (127.0.0.1:3306) */
+`$i++;
+`$cfg['Servers'][`$i]['verbose'] = 'Laragon MySQL (127.0.0.1)';
 `$cfg['Servers'][`$i]['auth_type'] = 'config';
+`$cfg['Servers'][`$i]['host'] = '127.0.0.1';
+`$cfg['Servers'][`$i]['port'] = '3306';
+`$cfg['Servers'][`$i]['connect_type'] = 'tcp';
+`$cfg['Servers'][`$i]['extension'] = 'mysqli';
 `$cfg['Servers'][`$i]['user'] = 'root';
 `$cfg['Servers'][`$i]['password'] = '';
 `$cfg['Servers'][`$i]['AllowNoPassword'] = true;
-"@
-            # Blowfish secret 32-byte valid
-            $lPmaText = $lPmaText -replace "\`$cfg\['blowfish_secret'\]\s*=\s*'.*?';", "`$cfg['blowfish_secret'] = 'vK8mQ2xL9pZ4wR7tY1uI3oE5aA6sD8fG';"
+`$cfg['Servers'][`$i]['Compress'] = false;
 
-            # Matikan warning
-            if ($lPmaText -notmatch "PmaNoRelation_DisableWarning") {
-                $lPmaText += @"
+/* Server 2: Laragon MySQL (localhost:3306) */
+`$i++;
+`$cfg['Servers'][`$i]['verbose'] = 'Laragon MySQL (localhost)';
+`$cfg['Servers'][`$i]['auth_type'] = 'config';
+`$cfg['Servers'][`$i]['host'] = 'localhost';
+`$cfg['Servers'][`$i]['port'] = '3306';
+`$cfg['Servers'][`$i]['connect_type'] = 'tcp';
+`$cfg['Servers'][`$i]['extension'] = 'mysqli';
+`$cfg['Servers'][`$i]['user'] = 'root';
+`$cfg['Servers'][`$i]['password'] = '';
+`$cfg['Servers'][`$i]['AllowNoPassword'] = true;
+`$cfg['Servers'][`$i]['Compress'] = false;
 
-// Hilangkan peringatan konfigurasi storage & error reports
+/* Server 3: XAMPP MariaDB/MySQL (Port 3307) */
+`$i++;
+`$cfg['Servers'][`$i]['verbose'] = 'XAMPP MySQL (Port 3307)';
+`$cfg['Servers'][`$i]['auth_type'] = 'config';
+`$cfg['Servers'][`$i]['host'] = '127.0.0.1';
+`$cfg['Servers'][`$i]['port'] = '3307';
+`$cfg['Servers'][`$i]['connect_type'] = 'tcp';
+`$cfg['Servers'][`$i]['extension'] = 'mysqli';
+`$cfg['Servers'][`$i]['user'] = 'root';
+`$cfg['Servers'][`$i]['password'] = '';
+`$cfg['Servers'][`$i]['AllowNoPassword'] = true;
+`$cfg['Servers'][`$i]['Compress'] = false;
+
+`$cfg['UploadDir'] = '';
+`$cfg['SaveDir'] = '';
 `$cfg['PmaNoRelation_DisableWarning'] = true;
 `$cfg['SendErrorReports'] = 'never';
 `$cfg['VersionCheck'] = false;
 "@
-            }
             $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-            [System.IO.File]::WriteAllText($laragonPmaConfig, $lPmaText, $utf8NoBom)
-            Write-LogSuccess "phpMyAdmin Laragon berhasil dioptimasi: Langsung terbuka otomatis tanpa login & bebas warning!"
+            [System.IO.File]::WriteAllText($laragonPmaConfig, $cleanPmaContent, $utf8NoBom)
+            Write-LogSuccess "phpMyAdmin Laragon berhasil dioptimasi: Multi-Host, Langsung terbuka tanpa login & bebas warning!"
         }
     }
 
