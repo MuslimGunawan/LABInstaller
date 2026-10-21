@@ -219,8 +219,24 @@ function Invoke-PackageInstall {
         }
     }
 
-    # 2. Jalur Google Drive Mirror (Prioritas Utama Pengguna: Cepat & Hemat Kuota)
+    # 1b. Jalur Local Cache Folder apps (Jika file installer fisik sudah ada di apps/ atau direktori proyek)
     $appsDir = Get-AppStorageDirectory
+    $targetFileName = if ($Package.fileName) { $Package.fileName } else { "" }
+    if ($targetFileName) {
+        $localCacheFile = Join-Path -Path $appsDir -ChildPath $targetFileName
+        if ((Test-Path -Path $localCacheFile) -and ((Get-Item -Path $localCacheFile).Length -gt 100000)) {
+            $mb = [math]::Round((Get-Item -Path $localCacheFile).Length / 1MB, 2)
+            Write-LogSuccess "Berkas installer $pkgName sudah tersedia di folder apps (Cache Lokal): $localCacheFile ($mb MB)."
+            Write-LogInfo "Menjalankan instalasi offline dari folder apps tanpa mengunduh ulang..."
+            $installed = Install-LocalFilePackage -Package $Package -FilePath $localCacheFile
+            if ($installed) {
+                return $true
+            }
+            Write-LogWarning "Instalasi dari berkas lokal di folder apps gagal. Beralih ke metode pengunduhan berikutnya..."
+        }
+    }
+
+    # 2. Jalur Google Drive Mirror (Prioritas Utama Pengguna: Cepat & Hemat Kuota)
     if ($Package.gdriveMirrors -and $Package.gdriveMirrors.Count -gt 0) {
         $targetFileName = if ($Package.fileName) { $Package.fileName } else { "installer_$($Package.id).exe" }
         $gdriveLocalFile = Join-Path -Path $appsDir -ChildPath $targetFileName

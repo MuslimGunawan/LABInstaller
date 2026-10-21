@@ -1,7 +1,7 @@
 {
-  "version": "1.0.34",
+  "version": "1.0.35",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-21",
-  "description": "v1.0.34: Perbaikan tuntas 4 kendala lab: eliminasi peringatan PHP 8.5 bcmath & ext relative path; dual-engine Composer official fallback (composer.phar + composer.bat); eliminasi error 1619 Delphi 7 (bypass COM file lock & auto-create Bin/Bpl directory); serta validasi integritas fisik disk pada Registry Detector (anti-false skip / anti-ghost uninstaller untuk Laragon, XAMPP, dan stack lab)."
+  "description": "v1.0.35: Penyempurnaan offline cache: Laragon resmi (laragon-wamp.exe) & Laragon Custom (Laragon_Custom_LAB.zip) kini otomatis tersimpan permanen di folder apps/; penambahan Jalur 1b Prioritas Cache Offline Lokal untuk seluruh paket (XAMPP, Git, VSCode, dsb) sehingga jika file ada di folder apps/ langsung dipasang secara instan tanpa menyentuh internet."
 }

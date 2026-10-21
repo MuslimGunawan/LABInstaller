@@ -661,18 +661,25 @@ function Install-LaragonOfficial {
         return $true
     }
 
-    $tempInstaller = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "laragon-wamp.exe"
+    $appsDir = Get-AppStorageDirectory
+    $laragonInstaller = Join-Path -Path $appsDir -ChildPath "laragon-wamp.exe"
     $laragonUrl = "https://github.com/leokhoa/laragon/releases/download/6.0.0/laragon-wamp.exe"
 
     try {
-        Write-LogInfo "Mengunduh Laragon 6.0.0 dari GitHub: $laragonUrl..."
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        $webClient = New-Object System.Net.WebClient
-        $webClient.Headers.Add("User-Agent", "LABInstaller")
-        $webClient.DownloadFile($laragonUrl, $tempInstaller)
+        if ((Test-Path -Path $laragonInstaller) -and ((Get-Item -Path $laragonInstaller).Length -gt 10MB)) {
+            $mb = [math]::Round((Get-Item -Path $laragonInstaller).Length / 1MB, 2)
+            Write-LogSuccess "Berkas installer resmi Laragon 6.0.0 sudah tersedia di folder apps: $laragonInstaller ($mb MB)."
+        } else {
+            Write-LogInfo "Mengunduh Laragon 6.0.0 dari GitHub ke folder apps ($laragonInstaller)..."
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            $webClient = New-Object System.Net.WebClient
+            $webClient.Headers.Add("User-Agent", "LABInstaller")
+            $webClient.DownloadFile($laragonUrl, $laragonInstaller)
+            Write-LogSuccess "Installer resmi Laragon 6.0.0 berhasil diunduh dan disimpan di folder apps!"
+        }
 
         Write-LogInfo "Memasang Laragon 6.0.0 ke C:\laragon..."
-        $process = Start-Process -FilePath $tempInstaller -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=`"C:\laragon`"" -NoNewWindow -Wait -PassThru
+        $process = Start-Process -FilePath $laragonInstaller -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=`"C:\laragon`"" -NoNewWindow -Wait -PassThru
 
         if ($process.ExitCode -eq 0 -or (Test-Path -Path $laragonExe)) {
             Write-LogSuccess "Laragon 6.0.0 berhasil dipasang di C:\laragon."
@@ -686,11 +693,6 @@ function Install-LaragonOfficial {
     catch {
         Write-LogError "Gagal menginstal Laragon 6.0.0 - $_"
         return $false
-    }
-    finally {
-        if (Test-Path -Path $tempInstaller) {
-            Remove-Item -Path $tempInstaller -Force -ErrorAction SilentlyContinue
-        }
     }
 }
 
