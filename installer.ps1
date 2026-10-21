@@ -40,6 +40,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 try {
     $global:LabOriginalBgColor = $Host.UI.RawUI.BackgroundColor
     $global:LabOriginalFgColor = $Host.UI.RawUI.ForegroundColor
+    $Host.UI.RawUI.WindowTitle = "LABInstaller - Automated Lab Deployment"
 } catch {}
 
 # Nonaktifkan QuickEdit Mode agar klik mouse pada konsol tidak membekukan (pause) script
@@ -151,6 +152,9 @@ if ($config -and $config.system.checkUpdateOnStartup) {
 while ($true) {
     $versionInfo = Get-LocalVersionInfo
     $currentVersion = $versionInfo.version
+    try {
+        $Host.UI.RawUI.WindowTitle = "LABInstaller v$currentVersion - Automated Lab Deployment"
+    } catch {}
 
     Show-LabBanner -Version $currentVersion
 

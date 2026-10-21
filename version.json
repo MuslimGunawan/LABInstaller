@@ -1,7 +1,7 @@
 {
-  "version": "1.0.40",
+  "version": "1.0.41",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-21",
-  "description": "v1.0.40: Perbaikan Uninstaller XAMPP Tanpa CMD Popup, Solusi Koneksi phpMyAdmin Laragon Multi-Host & Pemisahan Total Aktivasi Windows/Office ke Menu [5]. (1) Menghilangkan 2 jendela cmd.exe yang muncul saat uninstall XAMPP dengan pembersihan otomatis murni tanpa uninstaller interaktif Bitnami; (2) Mengatasi error HY000/2002 'target machine actively refused it' pada phpMyAdmin Laragon dengan bind-address 0.0.0.0 di my.ini, aktivasi otomatis [mysql] Use=-1 di laragon.ini, dan konfigurasi multi-host (127.0.0.1, localhost, & XAMPP 3307); (3) Pemisahan aktivasi Windows & Office secara murni ke Menu [5] tanpa otomatisasi di Menu [1] maupun post-install."
+  "description": "v1.0.41: Optimasi Hemat Kuota Disk pada Modul Updater & Penataan Berkas Installer. (1) Memperbaiki error 'There is not enough space on the disk' saat menjalankan Menu [4] Update dengan membatasi backup HANYA pada modul sistem (core, manifests, ui, system, activator, script root) dan mengecualikan folder apps serta berkas zip/exe raksasa; (2) Otomatis membersihkan folder .backup usang dan merapikan installer liar di root direktori ke folder apps/; (3) Penyelarasan window title konsol agar selalu bersih dan profesional."
 }

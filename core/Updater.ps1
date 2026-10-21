@@ -215,17 +215,49 @@ function Invoke-SystemUpdate {
         }
         New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
 
-        # 1. Backup berkas saat ini
-        Write-LogInfo "Membuat backup sistem lokal ke: $backupDir"
+        # 0. Bersihkan backup usang untuk menghemat ruang disk
+        $backupRoot = Join-Path -Path $rootDir -ChildPath ".backup"
+        if (Test-Path -Path $backupRoot) {
+            Get-ChildItem -Path $backupRoot -Directory -ErrorAction SilentlyContinue |
+                Sort-Object CreationTime -Descending |
+                Select-Object -Skip 1 |
+                Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        }
+
+        # Rapikan installer liar (zip/exe) dari root direktori ke folder apps/ agar root bersih & hemat disk
+        $appsDir = Join-Path -Path $rootDir -ChildPath "apps"
+        if (-not (Test-Path -Path $appsDir)) { New-Item -ItemType Directory -Path $appsDir -Force | Out-Null }
+        $strayInstallers = Get-ChildItem -Path $rootDir -File -ErrorAction SilentlyContinue | Where-Object {
+            $_.Extension -in @(".zip", ".exe", ".msi", ".iso", ".7z", ".rar") -and
+            $_.Name -notin @("run.bat")
+        }
+        foreach ($stray in $strayInstallers) {
+            $destStray = Join-Path -Path $appsDir -ChildPath $stray.Name
+            if (-not (Test-Path -Path $destStray)) {
+                Move-Item -Path $stray.FullName -Destination $destStray -Force -ErrorAction SilentlyContinue
+            } else {
+                Remove-Item -Path $stray.FullName -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        # 1. Backup HANYA berkas & modul sistem (core, manifests, ui, system, activator, script root)
+        # JANGAN PERNAH menyalin folder apps, cache, atau installer raksasa yang memakan kuota disk!
+        Write-LogInfo "Membuat backup komponen sistem lokal ke: $backupDir"
         New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
         
-        $itemsToBackup = Get-ChildItem -Path $rootDir | Where-Object { 
-            $_.Name -notin @(".git", ".backup", ".update_staging", "logs") 
+        $systemEntries = @("core", "manifests", "ui", "system", "activator", "installer.ps1", "version.json", "config.json", "run.bat")
+        $itemsToBackup = Get-ChildItem -Path $rootDir -ErrorAction SilentlyContinue | Where-Object { 
+            ($_.Name -in $systemEntries) -and 
+            ($_.Name -notin @(".git", ".backup", ".update_staging", "logs", "apps", "downloads", "cache", "temp")) -and
+            ($_.Extension -notin @(".zip", ".exe", ".msi", ".iso", ".7z", ".rar", ".tar", ".gz"))
         }
+
         foreach ($item in $itemsToBackup) {
-            Copy-Item -Path $item.FullName -Destination $backupDir -Recurse -Force
+            try {
+                Copy-Item -Path $item.FullName -Destination $backupDir -Recurse -Force -ErrorAction SilentlyContinue
+            } catch {}
         }
-        Write-LogSuccess "Backup berkas lokal berhasil dibuat."
+        Write-LogSuccess "Backup sistem lokal berhasil dibuat (ringan & hemat disk)."
 
         # 2. Unduh berkas pembaruan (.zip)
         Write-LogInfo "Mengunduh paket pembaruan dari: $($UpdateInfo.ArchiveUrl)..."
@@ -259,13 +291,13 @@ function Invoke-SystemUpdate {
 
         # 4. Menimpa berkas lama dengan berkas baru
         Write-LogStep "Menimpa berkas sistem dengan versi terbaru (v$($UpdateInfo.RemoteVersion))..."
-        $updateItems = Get-ChildItem -Path $sourceFilesRoot | Where-Object { 
-            $_.Name -notin @(".git", ".backup", ".update_staging", "logs") 
+        $updateItems = Get-ChildItem -Path $sourceFilesRoot -ErrorAction SilentlyContinue | Where-Object { 
+            $_.Name -notin @(".git", ".backup", ".update_staging", "logs", "apps", "downloads", "cache", "temp") 
         }
 
         foreach ($uItem in $updateItems) {
             $destPath = Join-Path -Path $rootDir -ChildPath $uItem.Name
-            Copy-Item -Path $uItem.FullName -Destination $rootDir -Recurse -Force
+            Copy-Item -Path $uItem.FullName -Destination $rootDir -Recurse -Force -ErrorAction SilentlyContinue
             Write-LogInfo "Diperbarui: $($uItem.Name)"
         }
 
@@ -285,9 +317,9 @@ function Invoke-SystemUpdate {
         Write-LogWarning "Memulai proses pemulihan (Rollback) dari backup..."
 
         if (Test-Path -Path $backupDir) {
-            $backupItems = Get-ChildItem -Path $backupDir
+            $backupItems = Get-ChildItem -Path $backupDir -ErrorAction SilentlyContinue
             foreach ($bItem in $backupItems) {
-                Copy-Item -Path $bItem.FullName -Destination $rootDir -Recurse -Force
+                Copy-Item -Path $bItem.FullName -Destination $rootDir -Recurse -Force -ErrorAction SilentlyContinue
             }
             Write-LogSuccess "Rollback selesai. Sistem dikembalikan ke kondisi sebelumnya."
         }
