@@ -215,8 +215,19 @@ function Setup-PhpEnvironment {
                 $wc.DownloadFile($phpUrl, $phpZip)
             }
             if (Test-Path -Path $phpZip) {
+                Get-Process -Name "php", "php-cgi" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Milliseconds 300
                 if (-not (Test-Path -Path $phpToolsDir)) { New-Item -ItemType Directory -Path $phpToolsDir -Force | Out-Null }
-                Expand-Archive -Path $phpZip -DestinationPath $phpToolsDir -Force
+                
+                $sevenZip = "C:\Program Files\7-Zip\7z.exe"
+                if (Test-Path -Path $sevenZip) {
+                    Start-Process -FilePath $sevenZip -ArgumentList "x `"$phpZip`" -o`"$phpToolsDir`" -y" -NoNewWindow -Wait
+                } elseif (Get-Command "tar.exe" -ErrorAction SilentlyContinue) {
+                    Start-Process -FilePath "tar.exe" -ArgumentList "-xf `"$phpZip`" -C `"$phpToolsDir`"" -NoNewWindow -Wait
+                } else {
+                    Expand-Archive -Path $phpZip -DestinationPath $phpToolsDir -Force -ErrorAction SilentlyContinue
+                }
+
                 if (Test-Path -Path (Join-Path -Path $phpToolsDir -ChildPath "php.exe")) {
                     $phpDir = $phpToolsDir
                     Add-DirectoryToPath -PathToAdd $phpDir -Scope "Machine" | Out-Null

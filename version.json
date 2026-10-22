@@ -1,7 +1,7 @@
 {
-  "version": "1.0.46",
+  "version": "1.0.47",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-22",
-  "description": "v1.0.46: Audit Menyeluruh Anti-Ghost & Penegakan Kehadiran Fisik 25 Paket Lab. (1) Mewajibkan verifikasi fisik biner pada SEMUA paket di registry (Test-PackagePhysicalPresence); (2) Menambahkan deteksi multi-path spesifik untuk seluruh IDE dan tool (VS Code, Delphi 7, QGIS, Packet Tracer, Office, Android Studio, Visual Studio, dll); (3) Menambahkan pathCheck pada VC++ Redist, VS Code, dan Python 3.12; (4) Menambahkan fallback CLI untuk VS Code dan Python."
+  "description": "v1.0.47: Eliminasi Lock UnauthorizedAccessException pada Ekstraksi PHP & Upgrade Multi-Engine Ekstraksi. (1) Penghentian otomatis proses php/php-cgi sebelum ekstraksi untuk melepaskan handle memori pada libcrypto/libssl DLL; (2) Upgrade prioritas mesin ekstraksi ZIP ke 7-Zip (7z.exe) dan Windows Native tar.exe untuk performa tinggi bebas error modul PowerShell Archive; (3) Penanganan senyap (SilentlyContinue) pada fallback Expand-Archive."
 }

@@ -527,8 +527,29 @@ function Install-LocalFilePackage {
         }
         elseif ($ext -eq ".zip") {
             $destDir = if ($Package.extractDir) { $Package.extractDir } else { "C:\tools\$($Package.id)" }
+            if (-not (Test-Path -Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
+
+            # Bebaskan kunci file proses PHP jika folder tujuan adalah PHP
+            if ($destDir -like "*php*" -or $Package.id -like "*PHP*") {
+                Get-Process -Name "php", "php-cgi" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Milliseconds 300
+            }
+
             Write-LogInfo "Mengekstrak paket ZIP ke $destDir..."
-            Expand-Archive -Path $FilePath -DestinationPath $destDir -Force
+            
+            $sevenZipExe = "C:\Program Files\7-Zip\7z.exe"
+            if (-not (Test-Path -Path $sevenZipExe)) {
+                $sevenZipCmd = Get-Command "7z.exe" -ErrorAction SilentlyContinue
+                if ($sevenZipCmd) { $sevenZipExe = $sevenZipCmd.Source }
+            }
+
+            if (Test-Path -Path $sevenZipExe) {
+                Start-Process -FilePath $sevenZipExe -ArgumentList "x `"$FilePath`" -o`"$destDir`" -y" -NoNewWindow -Wait
+            } elseif (Get-Command "tar.exe" -ErrorAction SilentlyContinue) {
+                Start-Process -FilePath "tar.exe" -ArgumentList "-xf `"$FilePath`" -C `"$destDir`"" -NoNewWindow -Wait
+            } else {
+                Expand-Archive -Path $FilePath -DestinationPath $destDir -Force -ErrorAction SilentlyContinue
+            }
 
             # Validasi integritas ekstraksi: Jika paket memiliki pathCheck (misal C:\tools\php85\php.exe),
             # pastikan binari target benar-benar ada di dalam hasil ekstraksi!
