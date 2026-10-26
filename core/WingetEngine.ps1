@@ -291,7 +291,22 @@ function Resolve-MediaFireDirectLink {
 
     # Jika sudah merupakan URL direct download CDN MediaFire
     if ($MediaFireUrl -match '(?i)^https?://download\d*\.mediafire\.com/') {
-        return $MediaFireUrl
+        $curlCmd = Get-Command "curl.exe" -ErrorAction SilentlyContinue
+        $isLive = $false
+        if ($curlCmd) {
+            $head = & $curlCmd.Source -sI -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "$MediaFireUrl" 2>$null
+            if ($head -match 'HTTP/\d(?:\.\d)?\s+200') {
+                $isLive = $true
+            }
+        }
+        if ($isLive) {
+            return $MediaFireUrl
+        }
+        # Jika token kedaluwarsa, rekonstruksi otomatis ke URL permanen
+        if ($MediaFireUrl -match '(?i)https?://download\d*\.mediafire\.com/[^/]+/([^/]+)/([^/]+)') {
+            $MediaFireUrl = "https://www.mediafire.com/file/$($Matches[1])/$($Matches[2])/file"
+            Write-LogInfo "Token tautan CDN langsung kedaluwarsa. Mengonversi ke URL permanen: $MediaFireUrl"
+        }
     }
 
     $directLink = $null
