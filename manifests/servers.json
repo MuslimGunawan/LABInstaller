@@ -13,6 +13,7 @@
       "1bbM4aMQbZcC-XyJNkU-36R6x8Wy2dbjp",
       "1qDaAbmCs0R850Z8bfm0zpqBLx-DhMH08"
     ],
+    "mediafireUrl": "https://www.mediafire.com/file/4fav3j4nchbbuhm/Laragon_Custom_LAB.zip/file",
     "fileName": "Laragon_Custom_LAB.zip",
     "directUrl": "https://github.com/leokhoa/laragon/releases/download/6.0.0/laragon-wamp.exe",
     "directArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=\"C:\\laragon\"",

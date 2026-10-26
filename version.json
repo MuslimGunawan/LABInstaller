@@ -1,7 +1,7 @@
 {
-  "version": "1.0.47",
+  "version": "1.0.48",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
-  "releaseDate": "2026-10-22",
-  "description": "v1.0.47: Eliminasi Lock UnauthorizedAccessException pada Ekstraksi PHP & Upgrade Multi-Engine Ekstraksi. (1) Penghentian otomatis proses php/php-cgi sebelum ekstraksi untuk melepaskan handle memori pada libcrypto/libssl DLL; (2) Upgrade prioritas mesin ekstraksi ZIP ke 7-Zip (7z.exe) dan Windows Native tar.exe untuk performa tinggi bebas error modul PowerShell Archive; (3) Penanganan senyap (SilentlyContinue) pada fallback Expand-Archive."
+  "releaseDate": "2026-10-26",
+  "description": "v1.0.48: Integrasi MediaFire High-Speed CDN Direct Mirror & Anti-Bot Turnstile Bypass. (1) Penambahan resolver dinamis tautan langsung MediaFire (Resolve-MediaFireDirectLink) dengan browser emulation headers untuk bypass Cloudflare Turnstile; (2) Implementasi mesin unduh MediaFire berkecepatan tinggi dengan dukungan resume (curl -C -) dan verifikasi struktur arsip ZIP/RAR; (3) Integrasi mirror MediaFire untuk paket Borland Delphi 7, Laragon Custom Lab Suite, dan Cisco Packet Tracer 9 sebagai fallback tangguh saat kuota Google Drive tercapai."
 }

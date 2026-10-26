@@ -133,11 +133,34 @@ function Test-ValidInstallerFile {
             }
             "zip" {
                 # Validasi Magic Header ZIP: PK (0x50 0x4B)
-                return ($buf[0] -eq 80 -and $buf[1] -eq 75)
+                if ($buf[0] -ne 80 -or $buf[1] -ne 75) { return $false }
+                try {
+                    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+                    $za = [System.IO.Compression.ZipFile]::OpenRead($FilePath)
+                    $null = $za.Entries.Count
+                    $za.Dispose()
+                    return $true
+                } catch {
+                    return $false
+                }
             }
             "msi" {
                 # Validasi Magic Header OLE Compound: 0xD0 0xCF 0x11 0xE0
                 return ($buf[0] -eq 208 -and $buf[1] -eq 207 -and $buf[2] -eq 17 -and $buf[3] -eq 224)
+            }
+            "rar" {
+                # Validasi Magic Header RAR: Rar! (0x52 0x61 0x72 0x21)
+                if ($buf[0] -ne 82 -or $buf[1] -ne 97 -or $buf[2] -ne 114 -or $buf[3] -ne 33) { return $false }
+                $sevenZip = "C:\Program Files\7-Zip\7z.exe"
+                if (-not (Test-Path $sevenZip)) {
+                    $cmd7z = Get-Command "7z.exe" -ErrorAction SilentlyContinue
+                    if ($cmd7z) { $sevenZip = $cmd7z.Source }
+                }
+                if (Test-Path $sevenZip) {
+                    $testProc = Start-Process -FilePath $sevenZip -ArgumentList "t `"$FilePath`"" -NoNewWindow -Wait -PassThru
+                    return ($testProc.ExitCode -eq 0)
+                }
+                return $true
             }
             Default {
                 return $true
@@ -259,6 +282,195 @@ function Invoke-GoogleDriveMultiMirrorDownload {
     return $false
 }
 
+function Resolve-MediaFireDirectLink {
+    param (
+        [string]$MediaFireUrl
+    )
+
+    if ([string]::IsNullOrWhiteSpace($MediaFireUrl)) { return $null }
+
+    # Jika sudah merupakan URL direct download CDN MediaFire
+    if ($MediaFireUrl -match '(?i)^https?://download\d*\.mediafire\.com/') {
+        return $MediaFireUrl
+    }
+
+    $directLink = $null
+    $ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+
+    # Strategi 1: Gunakan curl.exe native (Sangat andal melewati Cloudflare Turnstile MediaFire)
+    $curlCmd = Get-Command "curl.exe" -ErrorAction SilentlyContinue
+    if ($curlCmd) {
+        try {
+            $htmlLines = & $curlCmd.Source -sL -A $ua `
+                -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" `
+                -H "Accept-Language: en-US,en;q=0.5" `
+                -H "Sec-Fetch-Dest: document" `
+                -H "Sec-Fetch-Mode: navigate" `
+                -H "Sec-Fetch-Site: none" `
+                "$MediaFireUrl" 2>$null
+
+            foreach ($line in $htmlLines) {
+                if ($line -match 'href\s*=\s*["''](https?://download\d*\.mediafire\.com/[^"''\s>]+)["'']') {
+                    $directLink = $Matches[1]
+                    break
+                }
+                elseif ($line -match 'id\s*=\s*["'']downloadButton["''][^>]*href\s*=\s*["'']([^"''\s>]+)["'']') {
+                    $directLink = $Matches[1]
+                    break
+                }
+            }
+
+            # Fallback pencarian multi-baris jika belum ditemukan
+            if (-not $directLink -and $htmlLines) {
+                $joined = $htmlLines -join "`n"
+                if ($joined -match '(?is)id="downloadButton"[^>]*href="([^"]+)"') {
+                    $directLink = $Matches[1]
+                } elseif ($joined -match '(?is)href="([^"]+)"[^>]*id="downloadButton"') {
+                    $directLink = $Matches[1]
+                }
+            }
+        } catch {}
+    }
+
+    # Strategi 2: Fallback WebRequest jika curl tidak menghasilkan link
+    if (-not $directLink) {
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            $req = [System.Net.HttpWebRequest]::Create($MediaFireUrl)
+            $req.UserAgent = $ua
+            $req.Accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            $req.Headers.Add("Accept-Language", "en-US,en;q=0.5")
+            $req.AllowAutoRedirect = $true
+            $req.Timeout = 15000
+            $resp = $req.GetResponse()
+            $sr = New-Object System.IO.StreamReader($resp.GetResponseStream())
+            $html = $sr.ReadToEnd()
+            $sr.Close(); $resp.Close()
+
+            if ($html -match '(?is)href\s*=\s*["''](https?://download\d*\.mediafire\.com/[^"''\s>]+)["'']') {
+                $directLink = $Matches[1]
+            } elseif ($html -match '(?is)id="downloadButton"[^>]*href="([^"]+)"') {
+                $directLink = $Matches[1]
+            }
+        } catch {}
+    }
+
+    return $directLink
+}
+
+function Invoke-MediaFireFileDownload {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$MediaFireUrl,
+        [Parameter(Mandatory=$true)]
+        [string]$DestinationPath,
+        [string]$AppName = "Aplikasi",
+        [long]$MinSizeBytes = 10000000
+    )
+
+    $ext = [System.IO.Path]::GetExtension($DestinationPath).TrimStart(".").ToLower()
+
+    # Cek apakah berkas sudah ada dan valid di cache
+    if (Test-Path -Path $DestinationPath) {
+        if (Test-ValidInstallerFile -FilePath $DestinationPath -ExpectedType $ext -MinSizeBytes $MinSizeBytes) {
+            $mb = [math]::Round((Get-Item -Path $DestinationPath).Length / 1MB, 2)
+            Write-LogSuccess "Berkas installer $AppName sudah tersedia di penyimpanan lokal (Cache Valid): $DestinationPath ($mb MB)."
+            return $true
+        }
+    }
+
+    Write-LogInfo "Mendeteksi tautan unduhan langsung MediaFire untuk $AppName..."
+    $directUrl = Resolve-MediaFireDirectLink -MediaFireUrl $MediaFireUrl
+    if (-not $directUrl) {
+        Write-LogWarning "Gagal mendeteksi tautan unduhan langsung dari MediaFire ($MediaFireUrl)."
+        return $false
+    }
+
+    Write-LogInfo "Tautan CDN langsung MediaFire terdeteksi. Memulai proses pengunduhan..."
+
+    $parentDir = Split-Path -Parent $DestinationPath
+    if ($parentDir -and (-not (Test-Path -Path $parentDir))) {
+        New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+    }
+
+    $downloadSuccess = $false
+    $curlCmd = Get-Command "curl.exe" -ErrorAction SilentlyContinue
+
+    if ($curlCmd) {
+        try {
+            Write-LogInfo "Mengunduh via curl berkecepatan tinggi dengan dukungan resume otomatis (-C -)..."
+            $ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+            
+            & $curlCmd.Source -L --progress-bar -C - -A $ua -e $MediaFireUrl -o $DestinationPath $directUrl
+            $curlExit = $LASTEXITCODE
+
+            if ($curlExit -eq 0 -and (Test-Path -Path $DestinationPath)) {
+                $actualSize = (Get-Item -Path $DestinationPath).Length
+                if ($actualSize -ge $MinSizeBytes) {
+                    $downloadSuccess = $true
+                }
+            } else {
+                if (Test-Path -Path $DestinationPath) {
+                    $currMb = [math]::Round((Get-Item -Path $DestinationPath).Length / 1MB, 2)
+                    Write-LogWarning "Unduhan belum tuntas (Kode: $curlExit, Tersimpan: $currMb MB). Berkas dipertahankan agar dapat dilanjutkan pada sesi berikutnya."
+                }
+            }
+        } catch {
+            Write-LogWarning "Terjadi kendala saat mengunduh via curl: $($_.Exception.Message)"
+        }
+    }
+
+    # Fallback jika curl tidak tersedia
+    if (-not $downloadSuccess -and -not (Test-Path -Path $DestinationPath)) {
+        try {
+            Write-LogInfo "Mengunduh via WebClient/Stream engine..."
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            $req = [System.Net.HttpWebRequest]::Create($directUrl)
+            $req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) LABInstaller"
+            $req.AllowAutoRedirect = $true
+            $req.Timeout = 600000 # 10 menit
+            $resp = $req.GetResponse()
+            $stream = $resp.GetResponseStream()
+            $fs = [System.IO.File]::Create($DestinationPath)
+            $stream.CopyTo($fs)
+            $fs.Close(); $stream.Close(); $resp.Close()
+
+            if (Test-Path -Path $DestinationPath) {
+                $actualSize = (Get-Item -Path $DestinationPath).Length
+                if ($actualSize -ge $MinSizeBytes) {
+                    $downloadSuccess = $true
+                }
+            }
+        } catch {
+            Write-LogWarning "Gagal mengunduh via WebClient: $($_.Exception.Message)"
+        }
+    }
+
+    $isValid = (Test-ValidInstallerFile -FilePath $DestinationPath -ExpectedType $ext -MinSizeBytes $MinSizeBytes)
+
+    if ($downloadSuccess -and $isValid) {
+        $mb = [math]::Round((Get-Item -Path $DestinationPath).Length / 1MB, 2)
+        Write-LogSuccess "Berhasil mengunduh $AppName dari MediaFire CDN ($mb MB)!"
+        return $true
+    } else {
+        # Bersihkan hanya jika berkas adalah respons HTML error (bukan berkas binary unduhan yang sedang berlangsung)
+        if (Test-Path -Path $DestinationPath) {
+            try {
+                $fs = [System.IO.File]::OpenRead($DestinationPath)
+                $buf = New-Object byte[] 64
+                $read = $fs.Read($buf, 0, 64)
+                $fs.Close()
+                $headerAscii = [System.Text.Encoding]::ASCII.GetString($buf[0..([math]::Min(31, $read - 1))])
+                if ($headerAscii -match '^\s*<(!DOCTYPE|html|\?xml)') {
+                    Write-LogWarning "Berkas unduhan merupakan respons halaman web error. Menghapus berkas yang tidak valid..."
+                    Remove-Item -Path $DestinationPath -Force -ErrorAction SilentlyContinue
+                }
+            } catch {}
+        }
+        return $false
+    }
+}
+
 function Invoke-PackageInstall {
     param (
         [Parameter(Mandatory=$true)]
@@ -347,7 +559,31 @@ function Invoke-PackageInstall {
         }
     }
 
-    # 2b. Jalur Direct Vendor Prioritas (Jika paket di-flag preferDirect untuk server cepat seperti GitHub Releases)
+    # 2b. Jalur MediaFire Mirror (CDN Berkecepatan Tinggi - Fallback Andal saat Google Drive Limit/Error)
+    if (-not [string]::IsNullOrWhiteSpace($Package.mediafireUrl)) {
+        $targetFileName = if ($Package.fileName) { $Package.fileName } else { "installer_$($Package.id).exe" }
+        $mfLocalFile = Join-Path -Path $appsDir -ChildPath $targetFileName
+        $minExpected = switch ($Package.id) {
+            "Custom.Laragon"     { 500000000 }
+            "Borland.Delphi.7"   { 100000000 }
+            "Cisco.PacketTracer" { 50000000 }
+            Default              { 10000000 }
+        }
+
+        Write-LogInfo "Mencoba mengunduh dari MediaFire Mirror resmi ($($Package.mediafireUrl))..."
+        $mfDownloaded = Invoke-MediaFireFileDownload -MediaFireUrl $Package.mediafireUrl -DestinationPath $mfLocalFile -AppName $pkgName -MinSizeBytes $minExpected
+
+        if ($mfDownloaded -and (Test-Path -Path $mfLocalFile)) {
+            Write-LogInfo "Menjalankan instalasi dari paket MediaFire ($targetFileName)..."
+            $installed = Install-LocalFilePackage -Package $Package -FilePath $mfLocalFile
+            if ($installed) {
+                return $true
+            }
+            Write-LogWarning "Gagal memasang dari paket MediaFire lokal. Mencoba metode alternatif..."
+        }
+    }
+
+    # 2c. Jalur Direct Vendor Prioritas (Jika paket di-flag preferDirect untuk server cepat seperti GitHub Releases)
     if ($Package.preferDirect -and -not [string]::IsNullOrWhiteSpace($Package.directUrl)) {
         Write-LogInfo "Memprioritaskan unduhan langsung berkecepatan tinggi dari server vendor resmi/GitHub..."
         $directSuccess = Invoke-DirectInstaller -Package $Package
@@ -501,7 +737,7 @@ function Install-LocalFilePackage {
 
             if (Test-Path $sevenZipExe) {
                 Start-Process -FilePath $sevenZipExe -ArgumentList "x `"$FilePath`" -o`"$extractDir`" -y" -NoNewWindow -Wait
-                $setupExe = Get-ChildItem -Path $extractDir -Recurse -Filter "*.exe" | Select-Object -First 1
+                $setupExe = Get-ChildItem -Path $extractDir -Recurse -Filter "*.exe" | Where-Object { $_.Name -notmatch '(?i)unins' } | Select-Object -First 1
                 if ($setupExe) {
                     Write-LogInfo "Menjalankan installer yang diekstrak: $($setupExe.FullName)..."
                     $procParams = @{

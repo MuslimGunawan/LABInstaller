@@ -624,6 +624,25 @@ function Install-LaragonCustomSuite {
         }
     }
 
+    if (-not $localZip) {
+        $mfUrl = if ($Package -and $Package.mediafireUrl) { $Package.mediafireUrl } else {
+            $laragonPkg = (Load-AllManifestPackages -ManifestDir (Join-Path -Path (Get-Location).Path -ChildPath "manifests")) | Where-Object { $_.id -eq "Custom.Laragon" }
+            if ($laragonPkg -and $laragonPkg.mediafireUrl) { $laragonPkg.mediafireUrl } else { "https://www.mediafire.com/file/4fav3j4nchbbuhm/Laragon_Custom_LAB.zip/file" }
+        }
+        if ($mfUrl) {
+            Write-LogInfo "Google Drive mirror tidak dapat diakses atau limit. Mengalihkan ke MediaFire CDN Mirror..."
+            $mfSuccess = Invoke-MediaFireFileDownload -MediaFireUrl $mfUrl -DestinationPath $zipTarget -AppName "Laragon Custom Lab" -MinSizeBytes 500000000
+            if ($mfSuccess -and (Test-Path -Path $zipTarget)) {
+                $localZip = $zipTarget
+            }
+        }
+    }
+
+    if (-not $localZip -or (-not (Test-Path -Path $localZip))) {
+        Write-LogError "Berkas Laragon_Custom_LAB.zip tidak berhasil didapatkan dari penyimpanan lokal, Google Drive, maupun MediaFire."
+        return $false
+    }
+
     # LANGKAH 3: Timpa (Overlay) File C:\laragon dengan File Custom Anda
     if ($localZip -and (Test-Path -Path $localZip)) {
         Write-LogStep "Menimpa berkas Laragon dengan paket custom (PHP 8.5/8.4, MySQL 9/8, Apache/Nginx, phpMyAdmin)..."
@@ -996,11 +1015,22 @@ function Setup-Delphi7VisionLabHandler {
                 Write-LogInfo "Mengunduh Delphi 7 & VisionLab Bundle dari Google Drive mirror..."
                 Invoke-GoogleDriveMultiMirrorDownload -MirrorIds $mirrors -DestinationPath $bundleZip -AppName "Borland Delphi 7 + VisionLab" | Out-Null
             }
+
+            if (-not (Test-Path -Path $bundleZip)) {
+                $mfUrl = if ($Package -and $Package.mediafireUrl) { $Package.mediafireUrl } else {
+                    $delphiPkg = (Load-AllManifestPackages -ManifestDir (Join-Path -Path (Get-Location).Path -ChildPath "manifests")) | Where-Object { $_.id -eq "Borland.Delphi.7" }
+                    if ($delphiPkg -and $delphiPkg.mediafireUrl) { $delphiPkg.mediafireUrl } else { "https://www.mediafire.com/file/do3w0voed0ujihy/Delphi7_VisionLab_Bundle.zip/file" }
+                }
+                if ($mfUrl) {
+                    Write-LogInfo "Google Drive mirror tidak dapat diakses atau limit. Mengalihkan ke MediaFire CDN Mirror..."
+                    Invoke-MediaFireFileDownload -MediaFireUrl $mfUrl -DestinationPath $bundleZip -AppName "Borland Delphi 7 + VisionLab" -MinSizeBytes 100000000 | Out-Null
+                }
+            }
         }
     }
 
     if (-not (Test-Path -Path $bundleZip)) {
-        Write-LogError "Berkas Delphi7_VisionLab_Bundle.zip tidak ditemukan di folder apps maupun D:\KP."
+        Write-LogError "Berkas Delphi7_VisionLab_Bundle.zip tidak berhasil didapatkan dari penyimpanan lokal, Google Drive, maupun MediaFire."
         return $false
     }
 
