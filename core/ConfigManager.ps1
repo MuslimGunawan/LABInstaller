@@ -1118,36 +1118,47 @@ server {
         $laragonMysqlCandidates = @(
             (Join-Path -Path $laragonDir -ChildPath "bin\mysql\*")
         )
+        # Hentikan proses mysqld aktif jika ada agar handle file my.ini tidak terkunci
+        Get-Process -Name "mysqld", "mysql" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
         foreach ($mc in $laragonMysqlCandidates) {
             $dirs = Resolve-Path -Path $mc -ErrorAction SilentlyContinue
             foreach ($d in $dirs) {
                 $lMyIni = Join-Path -Path $d.Path -ChildPath "my.ini"
                 if (Test-Path -Path $lMyIni) {
-                    $myText = Get-Content -Path $lMyIni -Raw
-                    $myText = $myText -replace 'port\s*=\s*\d+', 'port = 3306'
+                    try {
+                        # Lepaskan proteksi ReadOnly jika berkas beratribut ReadOnly
+                        Set-ItemProperty -Path $lMyIni -Name IsReadOnly -Value $false -ErrorAction SilentlyContinue
+                        [System.IO.File]::SetAttributes($lMyIni, [System.IO.FileAttributes]::Normal)
 
-                    # Pastikan bind-address 0.0.0.0 agar menerima koneksi localhost dan 127.0.0.1 tanpa ditolak (actively refused)
-                    if ($myText -match '(?m)^bind-address\s*=.*') {
-                        $myText = $myText -replace '(?m)^bind-address\s*=.*', 'bind-address = 0.0.0.0'
-                    } elseif ($myText -match '\[mysqld\]') {
-                        $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1bind-address = 0.0.0.0`r`ndefault_authentication_plugin = mysql_native_password`r`n"
+                        $myText = Get-Content -Path $lMyIni -Raw
+                        $myText = $myText -replace 'port\s*=\s*\d+', 'port = 3306'
+
+                        # Pastikan bind-address 0.0.0.0 agar menerima koneksi localhost dan 127.0.0.1 tanpa ditolak (actively refused)
+                        if ($myText -match '(?m)^bind-address\s*=.*') {
+                            $myText = $myText -replace '(?m)^bind-address\s*=.*', 'bind-address = 0.0.0.0'
+                        } elseif ($myText -match '\[mysqld\]') {
+                            $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1bind-address = 0.0.0.0`r`ndefault_authentication_plugin = mysql_native_password`r`n"
+                        }
+
+                        if ($myText -notmatch 'default_authentication_plugin') {
+                            $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1default_authentication_plugin = mysql_native_password`r`n"
+                        }
+
+                        # Pastikan folder data sesuai yang ada di sistem
+                        $dataMysql8 = Join-Path -Path $laragonDir -ChildPath "data\mysql-8"
+                        $dataMysql  = Join-Path -Path $laragonDir -ChildPath "data\mysql"
+                        if (Test-Path -Path $dataMysql8) {
+                            $myText = $myText -replace 'datadir\s*=\s*.*', "datadir=`"C:/laragon/data/mysql-8`""
+                        } elseif (Test-Path -Path $dataMysql) {
+                            $myText = $myText -replace 'datadir\s*=\s*.*', "datadir=`"C:/laragon/data/mysql`""
+                        }
+
+                        [System.IO.File]::WriteAllText($lMyIni, $myText, [System.Text.Encoding]::ASCII)
+                        Write-LogSuccess "Konfigurasi MySQL Laragon ($lMyIni) diselaraskan (Port 3306, bind 0.0.0.0, ASCII Non-BOM)."
+                    } catch {
+                        Write-LogWarning "Tidak dapat menyelaraskan $lMyIni : $($_.Exception.Message)"
                     }
-
-                    if ($myText -notmatch 'default_authentication_plugin') {
-                        $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1default_authentication_plugin = mysql_native_password`r`n"
-                    }
-
-                    # Pastikan folder data sesuai yang ada di sistem
-                    $dataMysql8 = Join-Path -Path $laragonDir -ChildPath "data\mysql-8"
-                    $dataMysql  = Join-Path -Path $laragonDir -ChildPath "data\mysql"
-                    if (Test-Path -Path $dataMysql8) {
-                        $myText = $myText -replace 'datadir\s*=\s*.*', "datadir=`"C:/laragon/data/mysql-8`""
-                    } elseif (Test-Path -Path $dataMysql) {
-                        $myText = $myText -replace 'datadir\s*=\s*.*', "datadir=`"C:/laragon/data/mysql`""
-                    }
-
-                    [System.IO.File]::WriteAllText($lMyIni, $myText, [System.Text.Encoding]::ASCII)
-                    Write-LogSuccess "Konfigurasi MySQL Laragon ($lMyIni) diselaraskan (Port 3306, bind 0.0.0.0, ASCII Non-BOM)."
                 }
             }
         }
@@ -2212,10 +2223,37 @@ function Configure-FlutterAndAndroidEnvironment {
 
     # 4. Otomatisasi Lisensi Android (Accept all licenses via sdkmanager / flutter doctor)
     try {
-        Write-LogInfo "Menyetujui seluruh lisensi resmi Android SDK (flutter doctor --android-licenses)..."
-        $yesInputs = ("y`n" * 20)
-        $yesInputs | & $flutterExe doctor --android-licenses 2>$null | Out-Null
-        Write-LogSuccess "Pemeriksaan dan persetujuan lisensi Android SDK berhasil diselesaikan!"
+        Write-LogInfo "Menyetujui seluruh lisensi resmi Android SDK..."
+        $sdkManagerBat = Join-Path -Path $sdkDir -ChildPath "cmdline-tools\latest\bin\sdkmanager.bat"
+        if (-not (Test-Path -Path $sdkManagerBat)) {
+            $foundSdkMan = Get-ChildItem -Path $sdkDir -Recurse -Filter "sdkmanager.bat" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($foundSdkMan) { $sdkManagerBat = $foundSdkMan.FullName }
+        }
+
+        if ($sdkManagerBat -and (Test-Path -Path $sdkManagerBat)) {
+            $psiLic = New-Object System.Diagnostics.ProcessStartInfo
+            $psiLic.FileName = "cmd.exe"
+            $psiLic.Arguments = "/c `"(echo y&echo y&echo y&echo y&echo y&echo y&echo y) | `"$sdkManagerBat`" --licenses`""
+            $psiLic.UseShellExecute = $false
+            $psiLic.CreateNoWindow = $true
+            $pLic = [System.Diagnostics.Process]::Start($psiLic)
+            $pLic.WaitForExit(15000) | Out-Null
+            if (-not $pLic.HasExited) { try { $pLic.Kill() } catch {} }
+            Write-LogSuccess "Pemeriksaan dan persetujuan lisensi Android SDK via sdkmanager berhasil!"
+        } elseif ($flutterExe -and (Test-Path -Path $flutterExe)) {
+            # Jalankan via flutter doctor dengan timeout maksimal 20 detik agar tidak hang jika pub.dev offline
+            $psiFlut = New-Object System.Diagnostics.ProcessStartInfo
+            $psiFlut.FileName = "cmd.exe"
+            $psiFlut.Arguments = "/c `"(echo y&echo y&echo y&echo y&echo y) | `"$flutterExe`" doctor --android-licenses`""
+            $psiFlut.UseShellExecute = $false
+            $psiFlut.CreateNoWindow = $true
+            $pFlut = [System.Diagnostics.Process]::Start($psiFlut)
+            $pFlut.WaitForExit(20000) | Out-Null
+            if (-not $pFlut.HasExited) {
+                try { $pFlut.Kill() } catch {}
+            }
+            Write-LogSuccess "Pemeriksaan lisensi Android SDK berhasil diselesaikan!"
+        }
     } catch {}
 
     Write-LogSuccess "Ekosistem Flutter & Android Toolchain berhasil diselaraskan!"

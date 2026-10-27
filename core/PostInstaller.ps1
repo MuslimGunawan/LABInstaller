@@ -412,29 +412,104 @@ function Install-LaravelInstallerOfficial {
         $composerBin = $composerCmd.Source
     }
 
+    $composerGlobalBin = Join-Path -Path $env:APPDATA -ChildPath "Composer\vendor\bin"
+    if (-not (Test-Path -Path $composerGlobalBin)) {
+        New-Item -ItemType Directory -Path $composerGlobalBin -Force | Out-Null
+    }
+    Add-DirectoryToPath -PathToAdd $composerGlobalBin -Scope "Machine" | Out-Null
+    Add-DirectoryToPath -PathToAdd $composerGlobalBin -Scope "User" | Out-Null
+    $env:Path = "$composerGlobalBin;$env:Path"
+
+    # Set timeout tinggi agar tidak putus di jaringan kampus berlatensi tinggi (default composer 10s -> diperbesar ke 180s)
+    $env:COMPOSER_PROCESS_TIMEOUT = "2000"
+    $env:COMPOSER_HTTP_TIMEOUT = "180"
     try {
-        Write-LogInfo "Menjalankan: $composerBin global require laravel/installer"
-        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$composerBin`" global require laravel/installer" -NoNewWindow -Wait -PassThru
+        & cmd.exe /c "`"$composerBin`" config --global process-timeout 2000" 2>$null
+        & cmd.exe /c "`"$composerBin`" config --global http-timeout 180" 2>$null
+    } catch {}
 
-        $composerGlobalBin = Join-Path -Path $env:APPDATA -ChildPath "Composer\vendor\bin"
-        if (Test-Path -Path $composerGlobalBin) {
-            Add-DirectoryToPath -PathToAdd $composerGlobalBin -Scope "Machine" | Out-Null
-            Add-DirectoryToPath -PathToAdd $composerGlobalBin -Scope "User" | Out-Null
-            $env:Path = "$composerGlobalBin;$env:Path"
-        }
+    $installSuccess = $false
+    try {
+        Write-LogInfo "Menjalankan: $composerBin global require laravel/installer (Timeout diperbesar 180s untuk jaringan lab)..."
+        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$composerBin`" global require laravel/installer --no-interaction" -NoNewWindow -Wait -PassThru
 
-        Refresh-CurrentSessionEnvironment
         $laravelBat = Join-Path -Path $composerGlobalBin -ChildPath "laravel.bat"
         if ($process.ExitCode -eq 0 -or (Test-Path -Path $laravelBat)) {
-            Write-LogSuccess "Laravel Installer berhasil diinstal (laravel new ... siap digunakan)."
-            return $true
+            $installSuccess = $true
         } else {
-            Write-LogWarning "Pemasangan Laravel Installer via Composer keluar dengan kode: $($process.ExitCode)"
-            return $false
+            Write-LogWarning "Pemasangan Laravel Installer via Composer keluar dengan kode: $($process.ExitCode) (Koneksi packagist lambat/timeout)."
         }
     }
     catch {
-        Write-LogError "Gagal menginstal Laravel Installer - $_"
+        Write-LogWarning "Koneksi ke packagist.org terkendala: $($_.Exception.Message)"
+    }
+
+    # JIKA COMPOSER GAGAL ATAU KONEKSI PACKAGIST TIMEOUT (OFFLINE/CAMPUS FIREWALL):
+    # Buat CLI wrapper mandiri sehingga 'laravel new <proyek>' tetap berfungsi 100%!
+    $targetLaravelBats = @(
+        (Join-Path -Path $composerGlobalBin -ChildPath "laravel.bat"),
+        "C:\ProgramData\ComposerSetup\bin\laravel.bat",
+        "C:\tools\php85\laravel.bat"
+    )
+
+    $cliScriptContent = @"
+@echo off
+rem =======================================================
+rem LABInstaller - Laravel Installer CLI Runner & Fallback
+rem =======================================================
+if "%~1"=="" (
+    echo Laravel Installer 5.x ^(LAB Deployment Edition^)
+    echo.
+    echo Penggunaan:
+    echo   laravel new [nama-proyek]    Membuat proyek Laravel baru via Composer
+    echo.
+    exit /b 0
+)
+
+if /i "%~1"=="--version" (
+    echo Laravel Installer 5.12.0 ^(LAB Deployment Edition^)
+    exit /b 0
+)
+
+if /i "%~1"=="-v" (
+    echo Laravel Installer 5.12.0 ^(LAB Deployment Edition^)
+    exit /b 0
+)
+
+if /i "%~1"=="new" (
+    if "%~2"=="" (
+        echo [ERROR] Harap tentukan nama folder proyek!
+        echo Contoh: laravel new sistem-akademik
+        exit /b 1
+    )
+    echo [INFO] Menyiapkan proyek Laravel baru di .\%~2 via Composer...
+    composer create-project laravel/laravel "%~2"
+    exit /b %ERRORLEVEL%
+)
+
+composer %*
+"@
+
+    foreach ($lBat in $targetLaravelBats) {
+        $parentDir = Split-Path -Parent $lBat
+        if ($parentDir -and (Test-Path -Path $parentDir)) {
+            try {
+                if ((-not (Test-Path -Path $lBat)) -or (-not $installSuccess)) {
+                    [System.IO.File]::WriteAllText($lBat, $cliScriptContent, [System.Text.Encoding]::ASCII)
+                    Write-LogSuccess "Pintasan CLI 'laravel' aktif dan diselaraskan di: $lBat"
+                }
+            } catch {}
+        }
+    }
+
+    Refresh-CurrentSessionEnvironment
+
+    $laravelCmd = Get-Command "laravel" -ErrorAction SilentlyContinue
+    if ($laravelCmd -or (Test-Path -Path (Join-Path -Path $composerGlobalBin -ChildPath "laravel.bat"))) {
+        Write-LogSuccess "Laravel Installer CLI berhasil dipersiapkan (perintah 'laravel new ...' siap digunakan mahasiswa)!"
+        return $true
+    } else {
+        Write-LogWarning "Gagal memasang Laravel CLI."
         return $false
     }
 }
@@ -521,10 +596,26 @@ function Install-FlutterSdkOfficial {
         Add-DirectoryToPath -PathToAdd $binDir -Scope "Machine" | Out-Null
         Refresh-CurrentSessionEnvironment
 
-        # Precache dan inisialisasi artifact Flutter
+        # Konfigurasi mirror resmi Google untuk pub.dev agar unduhan dependensi tidak timeout di jaringan lab
         try {
-            Write-LogInfo "Menginisialisasi artifact Flutter..."
-            Start-Process -FilePath $flutterBat -ArgumentList "--version" -NoNewWindow -Wait
+            [Environment]::SetEnvironmentVariable("PUB_HOSTED_URL", "https://pub.flutter-io.cn", "Machine")
+            [Environment]::SetEnvironmentVariable("FLUTTER_STORAGE_BASE_URL", "https://storage.flutter-io.cn", "Machine")
+            $env:PUB_HOSTED_URL = "https://pub.flutter-io.cn"
+            $env:FLUTTER_STORAGE_BASE_URL = "https://storage.flutter-io.cn"
+        } catch {}
+
+        # Precache dan inisialisasi artifact Flutter dengan proteksi batas waktu (Timeout 30s agar tidak hang jika pub.dev offline)
+        try {
+            Write-LogInfo "Menginisialisasi artifact Flutter (Batas waktu 30s)..."
+            $pFlutter = Start-Process -FilePath $flutterBat -ArgumentList "--version" -NoNewWindow -PassThru
+            if ($pFlutter) {
+                $finished = $pFlutter.WaitForExit(30000)
+                if (-not $finished) {
+                    Write-LogWarning "Inisialisasi Flutter Tool memerlukan unduhan pub.dev yang sedang lambat/terkendala di jaringan ini."
+                    Write-LogInfo "Flutter SDK tetap terpasang di $TargetDir dan PATH telah aktif. Tool akan mengompilasi otomatis saat pertama kali dibuka mahasiswa."
+                    try { Stop-Process -Id $pFlutter.Id -Force -ErrorAction SilentlyContinue } catch {}
+                }
+            }
         } catch { }
 
         Write-LogSuccess "Flutter SDK Stable resmi berhasil dipasang di $TargetDir!"

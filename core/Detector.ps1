@@ -510,6 +510,14 @@ function Get-PackageStatus {
             if ($resolvedPaths.Count -gt 0) {
                 $targetPath = $resolvedPaths[0]
                 $fileVer = (Get-Item $targetPath -ErrorAction SilentlyContinue).VersionInfo.ProductVersion
+                # Khusus Flutter SDK: ekstrak versi langsung dari berkas 'version' di root folder SDK (instan & tanpa memicu pub build)
+                if (-not $fileVer -and $Package.id -eq "Custom.FlutterSDK") {
+                    $flutterRoot = Split-Path -Parent (Split-Path -Parent $targetPath)
+                    $versionFile = Join-Path -Path $flutterRoot -ChildPath "version"
+                    if (Test-Path -Path $versionFile) {
+                        $fileVer = (Get-Content -Path $versionFile -Raw -ErrorAction SilentlyContinue).Trim()
+                    }
+                }
                 $result.InstalledVersion = if ($fileVer) { $fileVer } else { "Terpasang" }
                 $result.TargetVersion = $result.InstalledVersion
 
@@ -653,7 +661,11 @@ function Get-CustomCommandFallbackPath {
             }
         }
         "laravel" {
-            $candidates = @("$env:APPDATA\Composer\vendor\bin\laravel.bat")
+            $candidates = @(
+                "$env:APPDATA\Composer\vendor\bin\laravel.bat",
+                "C:\ProgramData\ComposerSetup\bin\laravel.bat",
+                "C:\tools\php85\laravel.bat"
+            )
             foreach ($c in $candidates) {
                 if (Test-Path -Path $c) { return $c }
             }
@@ -714,13 +726,16 @@ function Get-CommandVersionOutput {
         $p = New-Object System.Diagnostics.Process
         $p.StartInfo = $pinfo
         $p.Start() | Out-Null
-        $stdout = $p.StandardOutput.ReadToEnd()
-        $stderr = $p.StandardError.ReadToEnd()
+        
+        # PENTING: Panggil WaitForExit DULU sebelum membaca stream output untuk mencegah deadlock / freeze
         $exited = $p.WaitForExit(3000)
         if (-not $exited) {
             try { $p.Kill() } catch {}
             return $null
         }
+
+        $stdout = $p.StandardOutput.ReadToEnd()
+        $stderr = $p.StandardError.ReadToEnd()
 
         # Jika kode keluar non-zero, perintah gagal dieksekusi secara normal
         if ($p.ExitCode -ne 0) {

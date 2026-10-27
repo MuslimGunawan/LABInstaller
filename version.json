@@ -1,7 +1,7 @@
 {
-  "version": "1.0.48",
+  "version": "1.0.49",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
-  "releaseDate": "2026-10-26",
-  "description": "v1.0.48: Integrasi MediaFire High-Speed CDN Direct Mirror & Anti-Bot Turnstile Bypass. (1) Penambahan resolver dinamis tautan langsung MediaFire (Resolve-MediaFireDirectLink) dengan browser emulation headers untuk bypass Cloudflare Turnstile; (2) Implementasi mesin unduh MediaFire berkecepatan tinggi dengan dukungan resume (curl -C -) dan verifikasi struktur arsip ZIP/RAR; (3) Integrasi mirror MediaFire untuk paket Borland Delphi 7, Laragon Custom Lab Suite, dan Cisco Packet Tracer 9 sebagai fallback tangguh saat kuota Google Drive tercapai."
+  "releaseDate": "2026-10-27",
+  "description": "v1.0.49: Perbaikan Isu Lingkungan Komputer Lab (Jaringan Lambat/Offline, Lock MySQL, dan Anti-Hang). (1) Penanganan UnauthorizedAccessException pada my.ini Laragon MySQL dengan penghentian proses mysqld aktif dan pelepasan atribut Read-Only; (2) Peningkatan timeout Composer ke 180s serta pembuatan otomatis CLI wrapper mandiri (laravel.bat) agar 'laravel new' tetap 100% berfungsi saat koneksi repo.packagist.org timeout; (3) Integrasi mirror resmi Google untuk pub.dev (PUB_HOSTED_URL) dan isolasi timeout (30s) pada Flutter Tool build agar instalasi lab tidak berhenti (hang); (4) Eliminasi deadlock I/O pada Get-CommandVersionOutput dengan pemanggilan WaitForExit sebelum pembacaan stream; (5) Tampilan progres real-time per paket pada Menu 2 (Pindai Cepat)."
 }

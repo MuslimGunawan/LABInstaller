@@ -169,8 +169,21 @@ function Show-SystemScanOnly {
     Initialize-RegistryCache | Out-Null
 
     $scanResults = @()
+    $total = $manifestPackages.Count
+    $idx = 1
+    Write-Host ""
     foreach ($pkg in $manifestPackages) {
-        $scanResults += Get-PackageStatus -Package $pkg
+        $st = Get-PackageStatus -Package $pkg
+        $scanResults += $st
+        $color = switch ($st.Status) {
+            "UP_TO_DATE"       { "Green" }
+            "UPDATE_AVAILABLE" { "Yellow" }
+            Default            { "DarkGray" }
+        }
+        $priStr = "[P$($st.Priority)]".PadRight(6)
+        $nameStr = $st.Name.PadRight(48)
+        Write-Host "  $priStr $nameStr : [$($st.Status)]" -ForegroundColor $color
+        $idx++
     }
 
     Write-Host ""
