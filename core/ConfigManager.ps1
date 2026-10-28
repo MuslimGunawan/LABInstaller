@@ -1118,8 +1118,9 @@ server {
         $laragonMysqlCandidates = @(
             (Join-Path -Path $laragonDir -ChildPath "bin\mysql\*")
         )
-        # Hentikan proses mysqld aktif jika ada agar handle file my.ini tidak terkunci
-        Get-Process -Name "mysqld", "mysql" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        # Hentikan proses mysqld dan laragon aktif jika ada agar handle file my.ini tidak terkunci
+        Get-Process -Name "mysqld", "mysql", "laragon" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 300
 
         foreach ($mc in $laragonMysqlCandidates) {
             $dirs = Resolve-Path -Path $mc -ErrorAction SilentlyContinue
@@ -1138,24 +1139,52 @@ server {
                         if ($myText -match '(?m)^bind-address\s*=.*') {
                             $myText = $myText -replace '(?m)^bind-address\s*=.*', 'bind-address = 0.0.0.0'
                         } elseif ($myText -match '\[mysqld\]') {
-                            $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1bind-address = 0.0.0.0`r`ndefault_authentication_plugin = mysql_native_password`r`n"
+                            $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1bind-address = 0.0.0.0`r`n"
                         }
 
-                        if ($myText -notmatch 'default_authentication_plugin') {
-                            $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1default_authentication_plugin = mysql_native_password`r`n"
+                        # Deteksi versi MySQL: MySQL 8.4 LTS dan MySQL 9.x MENGHAPUS variabel default_authentication_plugin!
+                        # Menuliskan default_authentication_plugin pada MySQL 8.4+ / MySQL 9 menyebabkan crash fatal saat startup server.
+                        $isMysql84OrHigher = ($d.Path -match '(?i)mysql-(?:8\.[4-9]|[9-9]\d*)')
+
+                        if ($isMysql84OrHigher) {
+                            # Hapus opsi deprecated yang menyebabkan mysqld aborting di MySQL 8.4+ / 9.x
+                            $myText = $myText -replace '(?m)^\s*default_authentication_plugin\s*=.*(\r?\n)?', ''
+                        } else {
+                            # MySQL 8.0 ke bawah mendukung default_authentication_plugin
+                            if ($myText -notmatch 'default_authentication_plugin') {
+                                $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1default_authentication_plugin = mysql_native_password`r`n"
+                            }
                         }
 
                         # Pastikan folder data sesuai yang ada di sistem
-                        $dataMysql8 = Join-Path -Path $laragonDir -ChildPath "data\mysql-8"
-                        $dataMysql  = Join-Path -Path $laragonDir -ChildPath "data\mysql"
-                        if (Test-Path -Path $dataMysql8) {
-                            $myText = $myText -replace 'datadir\s*=\s*.*', "datadir=`"C:/laragon/data/mysql-8`""
-                        } elseif (Test-Path -Path $dataMysql) {
-                            $myText = $myText -replace 'datadir\s*=\s*.*', "datadir=`"C:/laragon/data/mysql`""
+                        $leaf = Split-Path -Leaf $d.Path
+                        $candData = @(
+                            (Join-Path -Path $laragonDir -ChildPath "data\$leaf"),
+                            (Join-Path -Path $laragonDir -ChildPath "data\mysql-8"),
+                            (Join-Path -Path $laragonDir -ChildPath "data\mysql")
+                        )
+                        $validData = $null
+                        foreach ($cd in $candData) {
+                            if (Test-Path -Path $cd) {
+                                $validData = $cd
+                                break
+                            }
+                        }
+                        if ($validData) {
+                            $normData = ($validData -replace '\\', '/')
+                            if ($myText -match 'datadir\s*=\s*.*') {
+                                $myText = $myText -replace 'datadir\s*=\s*.*', "datadir=`"$normData`""
+                            } elseif ($myText -match '\[mysqld\]') {
+                                $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1datadir=`"$normData`"`r`n"
+                            }
                         }
 
-                        [System.IO.File]::WriteAllText($lMyIni, $myText, [System.Text.Encoding]::ASCII)
-                        Write-LogSuccess "Konfigurasi MySQL Laragon ($lMyIni) diselaraskan (Port 3306, bind 0.0.0.0, ASCII Non-BOM)."
+                        try {
+                            [System.IO.File]::WriteAllText($lMyIni, $myText, [System.Text.Encoding]::ASCII)
+                        } catch {
+                            Set-Content -Path $lMyIni -Value $myText -Encoding Ascii -Force
+                        }
+                        Write-LogSuccess "Konfigurasi MySQL Laragon ($lMyIni) diselaraskan (Port 3306, bind 0.0.0.0, ASCII Non-BOM, Bebas Error Crash)."
                     } catch {
                         Write-LogWarning "Tidak dapat menyelaraskan $lMyIni : $($_.Exception.Message)"
                     }

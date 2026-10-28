@@ -316,14 +316,19 @@ function Install-ComposerOfficial {
             }
         }
 
-        $argList = "/VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS"
-        if ($phpForComposer) {
+        $argList = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS /DIR=`"C:\ProgramData\ComposerSetup`""
+        if ($phpForComposer -and (Test-Path -Path $phpForComposer)) {
             $argList += " /PHP=`"$phpForComposer`""
             Write-LogInfo "Mengaitkan Composer dengan runtime PHP: $phpForComposer"
         }
 
         Write-LogInfo "Menjalankan Composer-Setup.exe secara silent..."
-        $process = Start-Process -FilePath $installerPath -ArgumentList $argList -NoNewWindow -Wait -PassThru
+        $workDir = if (Test-Path -Path $appsDir) { $appsDir } else { $env:TEMP }
+        $process = Start-Process -FilePath $installerPath -WorkingDirectory $workDir -ArgumentList $argList -NoNewWindow -PassThru
+        $completed = $process.WaitForExit(60000)
+        if (-not $completed) {
+            try { $process.Kill() } catch {}
+        }
 
         $composerBin = "C:\ProgramData\ComposerSetup\bin"
         $composerBat = Join-Path -Path $composerBin -ChildPath "composer.bat"

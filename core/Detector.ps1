@@ -364,14 +364,15 @@ function Test-PackagePhysicalPresence {
         }
         "Python.Python.3.12" {
             $pyCandidates = @(
-                "C:\Program Files\Python312\python.exe",
-                "C:\Program Files (x86)\Python312\python.exe",
-                "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
-                "C:\Python312\python.exe"
+                "C:\Program Files\Python3*\python.exe",
+                "C:\Program Files (x86)\Python3*\python.exe",
+                "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe",
+                "C:\Users\*\AppData\Local\Programs\Python\Python3*\python.exe",
+                "C:\Python3*\python.exe"
             )
             foreach ($c in $pyCandidates) {
-                $item = Resolve-Path -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
-                if ($item -and (Test-Path -Path $item.Path)) { return $true }
+                $matched = Get-Item -Path $c -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notlike "*\Microsoft\WindowsApps\*" } | Select-Object -First 1
+                if ($matched -and (Test-Path -Path $matched.FullName)) { return $true }
             }
             $pyCmd = Get-Command "python" -ErrorAction SilentlyContinue
             if ($pyCmd -and $pyCmd.Source -notlike "*\Microsoft\WindowsApps\*") {
@@ -603,6 +604,10 @@ function Get-PackageStatus {
         # Validasi jika paket memiliki verifyCommand namun binary CLI tidak ada di sistem
         if (-not [string]::IsNullOrWhiteSpace($Package.verifyCommand)) {
             $cliCheck = Get-Command $Package.verifyCommand -ErrorAction SilentlyContinue
+            if ($cliCheck -and $cliCheck.Source -like "*\Microsoft\WindowsApps\*") {
+                $allCmds = Get-Command $Package.verifyCommand -All -ErrorAction SilentlyContinue | Where-Object { $_.Source -notlike "*\Microsoft\WindowsApps\*" }
+                $cliCheck = if ($allCmds) { $allCmds[0] } else { $null }
+            }
             if (-not $cliCheck) {
                 $fallbackCli = Get-CustomCommandFallbackPath -CommandName $Package.verifyCommand
                 if (-not ($fallbackCli -and (Test-Path -Path $fallbackCli))) {
@@ -695,13 +700,15 @@ function Get-CustomCommandFallbackPath {
         }
         "python" {
             $candidates = @(
-                "C:\Program Files\Python312\python.exe",
-                "C:\Program Files (x86)\Python312\python.exe",
-                "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
-                "C:\Python312\python.exe"
+                "C:\Program Files\Python3*\python.exe",
+                "C:\Program Files (x86)\Python3*\python.exe",
+                "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe",
+                "C:\Users\*\AppData\Local\Programs\Python\Python3*\python.exe",
+                "C:\Python3*\python.exe"
             )
             foreach ($c in $candidates) {
-                if (Test-Path -Path $c) { return $c }
+                $matched = Get-Item -Path $c -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notlike "*\Microsoft\WindowsApps\*" } | Select-Object -First 1
+                if ($matched) { return $matched.FullName }
             }
         }
     }

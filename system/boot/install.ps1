@@ -66,7 +66,14 @@ if (-not $isAdmin) {
 }
 
 # 3. Tentukan Lokasi Instalasi Berdasarkan Direktori Terminal Aktif
-if ((Split-Path -Leaf $currentLocation) -ieq "LABInstaller" -or (Test-Path -Path (Join-Path -Path $currentLocation -ChildPath "installer.ps1"))) {
+if ($currentLocation -like "*system32*" -or $currentLocation -like "*SysWOW64*") {
+    # Jangan pernah instal ke folder sistem Windows (system32)!
+    if (Test-Path "D:\") {
+        $installDir = "D:\LABInstaller"
+    } else {
+        $installDir = Join-Path -Path $env:SystemDrive -ChildPath "LABInstaller"
+    }
+} elseif ((Split-Path -Leaf $currentLocation) -ieq "LABInstaller" -or (Test-Path -Path (Join-Path -Path $currentLocation -ChildPath "installer.ps1"))) {
     $installDir = $currentLocation
 } else {
     $installDir = Join-Path -Path $currentLocation -ChildPath "LABInstaller"

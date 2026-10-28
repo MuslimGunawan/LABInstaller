@@ -528,20 +528,79 @@ function Invoke-PackageInstall {
     }
 
     if (-not $localCacheFile) {
+        # Tentukan kata kunci identitas unik wajib untuk mencegah salah pencocokan fatal (misal Git terdeteksi sebagai XAMPP)
+        $pkgId = if ($Package.id) { $Package.id } else { "" }
+        $pkgN  = if ($Package.name) { $Package.name } else { "" }
+
+        $mandatoryKeyword = $null
+        if ($pkgId -match '(?i)xampp' -or $pkgN -match '(?i)xampp') {
+            $mandatoryKeyword = '(?i)\bxampp\b'
+        } elseif ($pkgId -match '(?i)laragon' -or $pkgN -match '(?i)laragon') {
+            $mandatoryKeyword = '(?i)\blaragon\b'
+        } elseif ($pkgId -match '(?i)git' -or $pkgN -match '(?i)git') {
+            $mandatoryKeyword = '(?i)\bgit\b'
+        } elseif ($pkgId -match '(?i)python' -or $pkgN -match '(?i)python') {
+            $mandatoryKeyword = '(?i)\bpython\b'
+        } elseif ($pkgId -match '(?i)node' -or $pkgN -match '(?i)node') {
+            $mandatoryKeyword = '(?i)\bnode\b'
+        } elseif ($pkgId -match '(?i)temurin|openjdk|jdk' -or $pkgN -match '(?i)temurin|openjdk|jdk') {
+            $mandatoryKeyword = '(?i)(temurin|openjdk|jdk)'
+        } elseif ($pkgId -match '(?i)delphi' -or $pkgN -match '(?i)delphi') {
+            $mandatoryKeyword = '(?i)\bdelphi\b'
+        } elseif ($pkgId -match '(?i)packettracer|cisco' -or $pkgN -match '(?i)packettracer|cisco') {
+            $mandatoryKeyword = '(?i)(packettracer|cisco)'
+        } elseif ($pkgId -match '(?i)netbeans' -or $pkgN -match '(?i)netbeans') {
+            $mandatoryKeyword = '(?i)\bnetbeans\b'
+        } elseif ($pkgId -match '(?i)vscode' -or $pkgN -match '(?i)visualstudiocode|vs.*code') {
+            $mandatoryKeyword = '(?i)(vscode|visualstudiocode|vs_code)'
+        } elseif ($pkgId -match '(?i)vcredist' -or $pkgN -match '(?i)visual.*c\+\+') {
+            $mandatoryKeyword = '(?i)(vc_redist|vcredist)'
+        }
+
         # Cari file alternatif di folder apps yang cocok dengan nama paket / pattern installer (misal hasil unduhan WinGet)
         $matchedFile = Get-ChildItem -Path $appsDir -Filter "*.$pkgType" -ErrorAction SilentlyContinue | Where-Object {
             (Test-ValidInstallerFile -FilePath $_.FullName -ExpectedType $pkgType -MinSizeBytes $minExpectedSize) -and
             # Cegah salah pencocokan fatal: phpMyAdmin BUKAN runtime PHP!
-            (-not ($Package.id -like "PHP.*" -and $_.Name -match '(?i)phpmyadmin')) -and (
+            (-not ($pkgId -like "PHP.*" -and $_.Name -match '(?i)phpmyadmin')) -and
+            # Jika ada kata kunci unik wajib, nama berkas WAJIB memuat kata kunci tersebut!
+            ($null -eq $mandatoryKeyword -or $_.Name -match $mandatoryKeyword) -and (
                 ($targetFileName -and $_.Name -like "*$($targetFileName -replace '\.[^.]+$','')*") -or
-                ($Package.id -like "PHP.*" -and $_.Name -match '^php-8\.') -or
-                ($Package.id -and ($Package.id -notlike "PHP.*") -and $_.Name -like "*$($Package.id.Split('.')[-1])*") -or
-                ($Package.name -and ($Package.name -notmatch '(?i)^php\b') -and $_.Name -like "*$($Package.name -replace '\s+','*')*")
+                ($pkgId -like "PHP.*" -and $_.Name -match '^php-8\.') -or
+                ($targetFileName -and $_.Name -ieq $targetFileName)
             )
         } | Select-Object -First 1
 
         if ($matchedFile) {
             $localCacheFile = $matchedFile.FullName
+        }
+    }
+
+    # 1c. Pemindaian Cerdas Media Eksternal (USB Flashdisk / Drive Sekunder / Partisi Lain)
+    # Sangat membantu di Lab saat internet lambat: cukup tancapkan flashdisk berisi file installer
+    if (-not $localCacheFile -and $targetFileName) {
+        $externalDrives = Get-CimInstance Win32_LogicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.DriveType -in @(2, 3) -and $_.DeviceID -ne "C:" }
+        foreach ($drv in $externalDrives) {
+            $searchPaths = @(
+                (Join-Path -Path $drv.DeviceID -ChildPath $targetFileName),
+                (Join-Path -Path $drv.DeviceID -ChildPath "apps\$targetFileName"),
+                (Join-Path -Path $drv.DeviceID -ChildPath "LABInstaller\apps\$targetFileName"),
+                (Join-Path -Path $drv.DeviceID -ChildPath "KP\$targetFileName")
+            )
+            foreach ($sp in $searchPaths) {
+                if (Test-Path -Path $sp) {
+                    if (Test-ValidInstallerFile -FilePath $sp -ExpectedType $pkgType -MinSizeBytes $minExpectedSize) {
+                        Write-LogSuccess "Berkas installer $pkgName terdeteksi di media eksternal ($sp)!"
+                        $destCopy = Join-Path -Path $appsDir -ChildPath $targetFileName
+                        Write-LogInfo "Menyalin berkas dari media eksternal ke cache lokal ($destCopy)..."
+                        Copy-Item -Path $sp -Destination $destCopy -Force -ErrorAction SilentlyContinue
+                        if (Test-Path -Path $destCopy) {
+                            $localCacheFile = $destCopy
+                            break
+                        }
+                    }
+                }
+            }
+            if ($localCacheFile) { break }
         }
     }
 
@@ -667,7 +726,10 @@ function Invoke-WingetInstall {
         $timeoutMs = if ($Package.id -match "VisualStudio") { 1800000 } else { 900000 }
         $completed = $process.WaitForExit($timeoutMs)
 
-        if ($completed -and ($process.ExitCode -eq 0 -or $process.ExitCode -eq 2316632107 -or $process.ExitCode -eq -1978335189)) {
+        $successExitCodes = @(0, 3010, 2316632107, -1978335189, 2316632084, -1978335212)
+        $isPhysicallyPresent = (Test-PackagePhysicalPresence -Package $Package)
+
+        if ($completed -and ($process.ExitCode -in $successExitCodes -or $isPhysicallyPresent)) {
             Write-LogSuccess "$($Package.name) berhasil dipasang via WinGet (ExitCode: $($process.ExitCode))."
             Refresh-CurrentSessionEnvironment
             return $true
@@ -700,7 +762,8 @@ function Install-LocalFilePackage {
             $extraArgs = if (-not [string]::IsNullOrWhiteSpace($Package.directArgs)) { " " + $Package.directArgs } else { "" }
             $msiArgs = "/i `"$FilePath`"$extraArgs /norestart"
             $p = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArgs -NoNewWindow -Wait -PassThru
-            if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
+            $isPhysMsi = (Test-PackagePhysicalPresence -Package $Package)
+            if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010 -or $isPhysMsi) {
                 Write-LogSuccess "$pkgName berhasil dipasang via MSI."
                 Refresh-CurrentSessionEnvironment
                 return $true
@@ -721,7 +784,8 @@ function Install-LocalFilePackage {
                 $procParams["ArgumentList"] = $Package.directArgs
             }
             $p = Start-Process @procParams
-            if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
+            $isPhysicallyInstalled = (Test-PackagePhysicalPresence -Package $Package)
+            if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010 -or $isPhysicallyInstalled) {
                 Write-LogSuccess "$pkgName berhasil dipasang via EXE."
                 Refresh-CurrentSessionEnvironment
                 return $true
@@ -733,6 +797,14 @@ function Install-LocalFilePackage {
                 if ($p.ExitCode -eq -2147024784 -or $p.ExitCode -eq 2147942512) {
                     Write-LogError "Pemasangan $pkgName GAGAL KARENA RUANG DISK PENUH (ERROR_DISK_FULL - 0x80070070)!"
                     Write-LogWarning "Mohon perbesar kapasitas disk Virtual Machine atau kosongkan minimal 8-12 GB di Drive C:."
+                } elseif ($p.ExitCode -eq -2147467259) {
+                    # 0x80004005 E_FAIL: sering terjadi pada installer Python/WiX jika versi serupa sudah ada di sistem
+                    if ($Package.verifyCommand -and (Get-Command $Package.verifyCommand -ErrorAction SilentlyContinue)) {
+                        Write-LogSuccess "$pkgName sudah aktif dan terpasang di sistem (ExitCode: $($p.ExitCode))."
+                        Refresh-CurrentSessionEnvironment
+                        return $true
+                    }
+                    Write-LogWarning "Pemasangan langsung via EXE keluar dengan kode: -2147467259 (0x80004005 - Paket sudah terinstal/perlu penyesuaian)."
                 } else {
                     Write-LogError "Pemasangan EXE gagal dengan kode keluar: $($p.ExitCode)"
                 }

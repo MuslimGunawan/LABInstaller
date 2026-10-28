@@ -20,8 +20,9 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 if (-not $isAdmin) {
     Write-Host "LABInstaller memerlukan hak Administrator untuk mengonfigurasi sistem Windows." -ForegroundColor Yellow
     Write-Host "Meminta elevasi Administrator..." -ForegroundColor Cyan
+    $targetDir = Split-Path -Parent $PSCommandPath
     try {
-        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+        Start-Process -FilePath "powershell.exe" -WorkingDirectory "$targetDir" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
     }
     catch {
         Write-Host "Gagal membuka jendela Administrator: $_" -ForegroundColor Red
@@ -76,6 +77,9 @@ public class ConsoleQuickEdit {
 $ScriptRoot = $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($ScriptRoot)) {
     $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+}
+if ($ScriptRoot -and (Test-Path -Path $ScriptRoot)) {
+    Set-Location -LiteralPath $ScriptRoot
 }
 
 # ------------------------------------------------------------------------------
