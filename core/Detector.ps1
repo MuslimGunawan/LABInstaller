@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # LABInstaller - Core Detector (Zero-Hang Hybrid Engine)
 # Pendeteksian instan berbasis Windows Registry & CLI (100% Offline, Anti-Freeze, Anti-Shim)
 # ==============================================================================
@@ -80,8 +80,8 @@ function Test-PackagePhysicalPresence {
     param (
         [Parameter(Mandatory=$true)]
         [PSCustomObject]$Package,
-        [Parameter(Mandatory=$true)]
-        [PSCustomObject]$RegistryMatch
+        [Parameter(Mandatory=$false)]
+        [psobject]$RegistryMatch = $null
     )
 
     # ATURAN MUTLAK 0: Web Server Stack (Laragon & XAMPP)
@@ -116,7 +116,7 @@ function Test-PackagePhysicalPresence {
     }
 
     # 2. Cek InstallLocation dari Registry (Wajib memuat biner .exe aplikasi, bukan folder kosong atau file log)
-    if (-not [string]::IsNullOrWhiteSpace($RegistryMatch.InstallLocation)) {
+    if ($RegistryMatch -and -not [string]::IsNullOrWhiteSpace($RegistryMatch.InstallLocation)) {
         $instLoc = $RegistryMatch.InstallLocation.Trim('"').Trim()
         if (Test-Path -Path $instLoc) {
             $items = Get-ChildItem -Path $instLoc -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '(?i)(unins|setup|install|update)' } | Select-Object -First 1
@@ -125,7 +125,7 @@ function Test-PackagePhysicalPresence {
     }
 
     # 3. Cek DisplayIcon dari Registry (Hanya jika mengarah ke berkas executable .exe yang benar-benar ada di disk)
-    if (-not [string]::IsNullOrWhiteSpace($RegistryMatch.DisplayIcon)) {
+    if ($RegistryMatch -and -not [string]::IsNullOrWhiteSpace($RegistryMatch.DisplayIcon)) {
         $rawIcon = ($RegistryMatch.DisplayIcon -replace ',\s*-?\d+$', '').Trim('"').Trim()
         if ($rawIcon -and (Test-Path -Path $rawIcon) -and ($rawIcon -match '\.exe$') -and ($rawIcon -notmatch '(?i)(unins|setup|install|update)')) {
             return $true
@@ -144,7 +144,7 @@ function Test-PackagePhysicalPresence {
         "C:\ProgramData\Microsoft\Windows\Start Menu\Programs",
         "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
     )
-    $searchTerms = @($Package.name, $RegistryMatch.DisplayName)
+    $searchTerms = @($Package.name); if ($RegistryMatch -and $RegistryMatch.DisplayName) { $searchTerms += $RegistryMatch.DisplayName }
     if ($Package.registryPattern) { $searchTerms += $Package.registryPattern }
 
     if ($wscript) {

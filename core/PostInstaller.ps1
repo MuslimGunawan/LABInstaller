@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # LABInstaller - Core PostInstaller & Custom Tooling Handlers
 # Logika khusus untuk Java (JAVA_HOME), Python, PHP, Composer, Laravel, Flutter, Laragon, XAMPP
 # ==============================================================================
@@ -1047,6 +1047,11 @@ function Setup-LaragonEnvironment {
     
     # Pasang dan konfigurasi phpMyAdmin untuk Laragon
     Install-LaragonPhpMyAdmin -LaragonDir "C:\laragon" | Out-Null
+
+    # Konfigurasi port, isolasi firewall, my.ini, dan pra-inisialisasi database MySQL Laragon
+    if (Get-Command Configure-WebServerPorts -ErrorAction SilentlyContinue) {
+        Configure-WebServerPorts
+    }
     
     # Tambahkan git bawaan Laragon atau bin ke PATH jika diperlukan
     $laragonGit = "C:\laragon\bin\git\cmd"

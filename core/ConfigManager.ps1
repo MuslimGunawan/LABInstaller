@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # LABInstaller - Core Configuration & Port Conflict Manager
 # Mengelola isolasi port (Laragon vs XAMPP), konfigurasi php.ini, dan ekosistem Laravel
 # ==============================================================================
@@ -155,7 +155,7 @@ function Find-LegacyLabStackLocations {
     $discoveredDirs = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     # 1. Deteksi Proses Zombie & Executable Path
-    $targetProcNames = @("httpd", "mysqld", "mariadbd", "nginx", "php", "php-cgi", "laragon", "xampp-control", "xampp_start")
+    $targetProcNames = @("httpd", "mysqld", "mariadbd", "nginx", "php", "php-cgi", "laragon", "xampp-control", "xampp_start", "postgres", "pg_ctl", "redis-server", "memcached")
     foreach ($pName in $targetProcNames) {
         $procs = Get-Process -Name $pName -ErrorAction SilentlyContinue
         foreach ($p in $procs) {
@@ -185,9 +185,9 @@ function Find-LegacyLabStackLocations {
     try {
         $allServices = Get-CimInstance Win32_Service -ErrorAction SilentlyContinue
         foreach ($svc in $allServices) {
-            $isMatch = ($svc.Name -match '(?i)apache|httpd|mysql|mariadb|nginx|laragon|xampp|php') -or
-                       ($svc.DisplayName -match '(?i)apache|httpd|mysql|mariadb|nginx|laragon|xampp|php') -or
-                       ($svc.PathName -match '(?i)httpd\.exe|mysqld\.exe|mariadbd\.exe|nginx\.exe|php-cgi\.exe|laragon\.exe|xampp')
+            $isMatch = ($svc.Name -match '(?i)apache|httpd|mysql|mariadb|nginx|laragon|xampp|php|postgres|redis|memcached') -or
+                       ($svc.DisplayName -match '(?i)apache|httpd|mysql|mariadb|nginx|laragon|xampp|php|postgres|redis|memcached') -or
+                       ($svc.PathName -match '(?i)httpd\.exe|mysqld\.exe|mariadbd\.exe|nginx\.exe|php-cgi\.exe|laragon\.exe|xampp|postgres\.exe|pg_ctl\.exe|redis-server\.exe|memcached\.exe')
 
             if ($isMatch) {
                 $report.Services += [PSCustomObject]@{
@@ -462,14 +462,14 @@ function Invoke-CleanPurgeLegacyLabStack {
 
     # 1. Hentikan semua proses aktif secara agresif (taskkill force tree)
     Write-LogInfo "1/7. Menghentikan seluruh proses aktif terkait Web Server, PHP, dan Database..."
-    cmd.exe /c "taskkill /F /T /IM laragon* /IM mysqld* /IM mariadbd* /IM httpd* /IM nginx* /IM php* /IM xampp* 2>nul" | Out-Null
+    cmd.exe /c "taskkill /F /T /IM laragon* /IM mysqld* /IM mariadbd* /IM httpd* /IM nginx* /IM php* /IM xampp* /IM postgres* /IM pg_ctl* /IM redis* /IM memcached* 2>nul" | Out-Null
     foreach ($p in $audit.Processes) {
         try {
             Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
             Write-LogInfo "Proses $($p.Name) (PID: $($p.Id)) dihentikan."
         } catch {}
     }
-    $extraProcs = @("httpd", "mysqld", "mariadbd", "nginx", "php", "php-cgi", "laragon", "xampp-control", "xampp_start")
+    $extraProcs = @("httpd", "mysqld", "mariadbd", "nginx", "php", "php-cgi", "laragon", "xampp-control", "xampp_start", "postgres", "pg_ctl", "redis-server", "memcached")
     foreach ($ep in $extraProcs) {
         $found = Get-Process -Name $ep -ErrorAction SilentlyContinue
         if ($found) { $found | Stop-Process -Force -ErrorAction SilentlyContinue }
@@ -483,7 +483,7 @@ function Invoke-CleanPurgeLegacyLabStack {
         try { Stop-Service -Name $svc.Name -Force -ErrorAction SilentlyContinue } catch {}
         Start-Process -FilePath "sc.exe" -ArgumentList "delete `"$($svc.Name)`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
     }
-    $extraSvcs = @("Apache2.4", "apache", "Apache", "mysql", "MySQL", "MySQL80", "MySQL8", "mysql8", "laragon", "xamppapache", "xamppmysql")
+    $extraSvcs = @("Apache2.4", "apache", "Apache", "mysql", "MySQL", "MySQL80", "MySQL8", "mysql8", "laragon", "xamppapache", "xamppmysql", "postgresql*", "postgres*", "redis*", "memcached*")
     foreach ($es in $extraSvcs) {
         if (Get-Service -Name $es -ErrorAction SilentlyContinue) {
             try { Stop-Service -Name $es -Force -ErrorAction SilentlyContinue } catch {}
@@ -508,7 +508,7 @@ function Invoke-CleanPurgeLegacyLabStack {
     # senyap & tuntas via taskkill, sc delete service, registry purge, dan penghapusan direktori di bawah ini.
 
     # Pastikan proses terkunci mati kembali
-    cmd.exe /c "taskkill /F /T /IM laragon* /IM mysqld* /IM mariadbd* /IM httpd* /IM nginx* /IM php* /IM xampp* 2>nul" | Out-Null
+    cmd.exe /c "taskkill /F /T /IM laragon* /IM mysqld* /IM mariadbd* /IM httpd* /IM nginx* /IM php* /IM xampp* /IM postgres* /IM pg_ctl* /IM redis* /IM memcached* 2>nul" | Out-Null
 
     # 4. Cadangkan Proyek Pengguna & Hapus Folder Lama
     Write-LogInfo "4/7. Membersihkan direktori instalasi lama di seluruh drive..."
@@ -536,8 +536,14 @@ function Invoke-CleanPurgeLegacyLabStack {
 
             Write-LogInfo "Menghapus folder lama: $folderPath..."
             try {
-                cmd.exe /c "attrib -r -s -h `"$folderPath\*.*`" /s /d 2>nul" | Out-Null
-                Start-Process -FilePath "cmd.exe" -ArgumentList "/c rmdir /s /q `"$folderPath`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+                Get-Process -ErrorAction SilentlyContinue | Where-Object {
+                    try { $_.Path -and $_.Path.StartsWith($folderPath, [System.StringComparison]::OrdinalIgnoreCase) } catch { $false }
+                } | Stop-Process -Force -ErrorAction SilentlyContinue
+
+                cmd.exe /c "takeown /f `"$folderPath`" /r /d y >nul 2>&1"
+                cmd.exe /c "icacls `"$folderPath`" /grant *S-1-1-0:F /t /c /q >nul 2>&1"
+                cmd.exe /c "attrib -r -s -h `"$folderPath\*.*`" /s /d >nul 2>&1"
+                Start-Process -FilePath "cmd.exe" -ArgumentList "/c rmdir /s /q `"$folderPath`" >nul 2>&1" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
                 if (Test-Path -Path $folderPath) {
                     Remove-Item -Path $folderPath -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
                 }
@@ -552,8 +558,14 @@ function Invoke-CleanPurgeLegacyLabStack {
     $stdDirs = @("C:\laragon", "C:\xampp", "C:\tools\php85", "C:\php", "C:\ProgramData\ComposerSetup")
     foreach ($sd in $stdDirs) {
         if (Test-Path -Path $sd) {
-            cmd.exe /c "attrib -r -s -h `"$sd\*.*`" /s /d 2>nul" | Out-Null
-            Start-Process -FilePath "cmd.exe" -ArgumentList "/c rmdir /s /q `"$sd`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+            Get-Process -ErrorAction SilentlyContinue | Where-Object {
+                try { $_.Path -and $_.Path.StartsWith($sd, [System.StringComparison]::OrdinalIgnoreCase) } catch { $false }
+            } | Stop-Process -Force -ErrorAction SilentlyContinue
+
+            cmd.exe /c "takeown /f `"$sd`" /r /d y >nul 2>&1"
+            cmd.exe /c "icacls `"$sd`" /grant *S-1-1-0:F /t /c /q >nul 2>&1"
+            cmd.exe /c "attrib -r -s -h `"$sd\*.*`" /s /d >nul 2>&1"
+            Start-Process -FilePath "cmd.exe" -ArgumentList "/c rmdir /s /q `"$sd`" >nul 2>&1" -NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
             if (Test-Path -Path $sd) { Remove-Item -Path $sd -Recurse -Force -ErrorAction SilentlyContinue | Out-Null }
         }
     }
@@ -1144,7 +1156,7 @@ server {
 
                         # Deteksi versi MySQL: MySQL 8.4 LTS dan MySQL 9.x MENGHAPUS variabel default_authentication_plugin!
                         # Menuliskan default_authentication_plugin pada MySQL 8.4+ / MySQL 9 menyebabkan crash fatal saat startup server.
-                        $isMysql84OrHigher = ($d.Path -match '(?i)mysql-(?:8\.[4-9]|[9-9]\d*)')
+                        $isMysql84OrHigher = ($d.Path -match '(?i)mysql-(?:8\.[4-9]|[9-9]|\d{2,})\.')
 
                         if ($isMysql84OrHigher) {
                             # Hapus opsi deprecated yang menyebabkan mysqld aborting di MySQL 8.4+ / 9.x
@@ -1170,10 +1182,30 @@ server {
                                 break
                             }
                         }
+                        if (-not $validData) {
+                            $validData = Join-Path -Path $laragonDir -ChildPath "data\mysql"
+                            if (-not (Test-Path -Path $validData)) {
+                                New-Item -ItemType Directory -Path $validData -Force | Out-Null
+                            }
+                        }
+
+                        # Pra-inisialisasi database sistem jika data directory masih kosong / belum diinisialisasi
+                        $isDataReady = (Test-Path -Path (Join-Path -Path $validData -ChildPath "mysql")) -or (Test-Path -Path (Join-Path -Path $validData -ChildPath "ibdata1"))
+                        if (-not $isDataReady) {
+                            $mysqldBin = Join-Path -Path $d.Path -ChildPath "bin\mysqld.exe"
+                            if (Test-Path -Path $mysqldBin) {
+                                Write-LogInfo "Melakukan pra-inisialisasi database MySQL ($leaf) secara aman..."
+                                $normData = ($validData -replace '\\', '/')
+                                Get-Process -Name "mysqld", "mysql" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                                Start-Process -FilePath $mysqldBin -ArgumentList "--no-defaults --initialize-insecure --datadir=`"$normData`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue
+                                Write-LogSuccess "Database MySQL ($leaf) berhasil diinisialisasi! Siap start instan."
+                            }
+                        }
+
                         if ($validData) {
                             $normData = ($validData -replace '\\', '/')
-                            if ($myText -match 'datadir\s*=\s*.*') {
-                                $myText = $myText -replace 'datadir\s*=\s*.*', "datadir=`"$normData`""
+                            if ($myText -match '(?m)^\s*datadir\s*=.*') {
+                                $myText = $myText -replace '(?m)^\s*datadir\s*=.*', "datadir=`"$normData`""
                             } elseif ($myText -match '\[mysqld\]') {
                                 $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1datadir=`"$normData`"`r`n"
                             }
