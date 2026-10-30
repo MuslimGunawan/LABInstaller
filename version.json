@@ -1,7 +1,7 @@
-﻿{
-  "version": "1.0.52",
+{
+  "version": "1.0.53",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-30",
-  "description": "v1.0.52: Solusi Definitif Stack Laragon MySQL & Lab Deployment. (1) Eliminasi prompt interaktif Test-PackagePhysicalPresence pada instalasi XAMPP; (2) Pembersihan total daemon PostgreSQL, Redis, Memcached & permission takeover bebas error Access is denied; (3) Trik anti-injeksi Laragon my.ini (# default_authentication_plugin) & penguncian ReadOnly pada MySQL 8.4 LTS dan MySQL 9.x agar tidak aborting; (4) Pra-inisialisasi database sistem (--initialize-insecure) instan 0.5 detik; (5) Mode fallback otomatis ke Laragon 6.0.0 resmi jika mirror kustom offline/limit."
+  "description": "v1.0.53: Fix Definitif MySQL 9.7 Laragon & phpMyAdmin. (1) Penentuan target datadir presisi mysql-9 & mysql-8 sesuai spesifikasi arsitektur Laragon; (2) Pembersihan menyeluruh opsi default_authentication_plugin ganda; (3) Pra-inisialisasi database sistem mysql.ibd sebelum startup; (4) Penguncian atribut Read-Only permanen pada my.ini agar GUI Laragon tidak dapat menginjeksi opsi ilegal yang memicu crash aborting."
 }

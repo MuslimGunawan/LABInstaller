@@ -1154,6 +1154,9 @@ server {
                             $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1bind-address = 0.0.0.0`r`n"
                         }
 
+                        # 1. Bersihkan seluruh opsi atau komentar default_authentication_plugin yang ada
+                        $myText = $myText -replace '(?m)^\s*#?\s*default_authentication_plugin\s*=.*', ''
+
                         # Deteksi versi MySQL: MySQL 8.4 LTS dan MySQL 9.x MENGHAPUS variabel default_authentication_plugin!
                         # Menuliskan default_authentication_plugin pada MySQL 8.4+ / MySQL 9 menyebabkan crash fatal saat startup server.
                         $isMysql84OrHigher = ($d.Path -match '(?i)mysql-(?:8\.[4-9]|[9-9]|\d{2,})\.')
@@ -1163,78 +1166,62 @@ server {
                             # laragon.exe akan mendeteksi opsi hilang dan menginjeksi ulang default_authentication_plugin yang memicu crash!
                             # Oleh karena itu, kita beri komentar tanda pagar (# ) agar Laragon tidak menginjeksi ulang,
                             # sekaligus MySQL 8.4+/9.x mengabaikannya sebagai komentar dan tidak aborting saat startup.
-                            if ($myText -match '(?m)^\s*default_authentication_plugin\s*=.*') {
-                                $myText = $myText -replace '(?m)^\s*default_authentication_plugin\s*=.*', '# default_authentication_plugin=mysql_native_password'
-                            } elseif ($myText -notmatch 'default_authentication_plugin') {
-                                $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1# default_authentication_plugin=mysql_native_password`r`n"
-                            }
+                            $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1# default_authentication_plugin=mysql_native_password`r`n"
                         } else {
                             # MySQL 8.0 ke bawah mendukung default_authentication_plugin
-                            if ($myText -notmatch 'default_authentication_plugin') {
-                                $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1default_authentication_plugin = mysql_native_password`r`n"
-                            }
+                            $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1default_authentication_plugin = mysql_native_password`r`n"
                         }
 
-                        # Pastikan folder data sesuai yang ada di sistem
+                        # 2. Penentuan data directory yang presisi sesuai arsitektur Laragon
                         $leaf = Split-Path -Leaf $d.Path
-                        $existingDataDir = $null
-                        if ($myText -match '(?m)^\s*datadir\s*=\s*"?([^"\r\n]+)"?') {
-                            $extracted = $matches[1].Trim().Replace('/', '\')
-                            if (Test-Path -Path $extracted) { $existingDataDir = $extracted }
+                        $targetDataDirName = "mysql"
+                        if ($leaf -match '(?i)mysql-9') {
+                            $targetDataDirName = "mysql-9"
+                        } elseif ($leaf -match '(?i)mysql-8\.[4-9]') {
+                            $targetDataDirName = "mysql-8"
+                        } elseif ($leaf -match '(?i)mysql-8') {
+                            $targetDataDirName = "mysql"
                         }
 
-                        $candData = @(
-                            $existingDataDir,
-                            (Join-Path -Path $laragonDir -ChildPath "data\$leaf"),
-                            (Join-Path -Path $laragonDir -ChildPath "data\mysql-9"),
-                            (Join-Path -Path $laragonDir -ChildPath "data\mysql-8"),
-                            (Join-Path -Path $laragonDir -ChildPath "data\mysql")
-                        )
-                        $validData = $null
-                        foreach ($cd in $candData) {
-                            if ($cd -and (Test-Path -Path $cd)) {
-                                $validData = $cd
-                                break
-                            }
-                        }
-                        if (-not $validData) {
-                            $validData = Join-Path -Path $laragonDir -ChildPath "data\mysql"
-                            if (-not (Test-Path -Path $validData)) {
-                                New-Item -ItemType Directory -Path $validData -Force | Out-Null
-                            }
+                        $validData = Join-Path -Path $laragonDir -ChildPath "data\$targetDataDirName"
+                        if (-not (Test-Path -Path $validData)) {
+                            New-Item -ItemType Directory -Path $validData -Force | Out-Null
                         }
 
-                        # Pra-inisialisasi database sistem jika data directory masih kosong atau korup (tabel mysql.plugin hilang)
-                        $mysqlDbFolder = Join-Path -Path $validData -ChildPath "mysql"
-                        $isDataReady = (Test-Path -Path $mysqlDbFolder) -and ((Get-ChildItem -Path $mysqlDbFolder -ErrorAction SilentlyContinue).Count -gt 5)
+                        $normData = ($validData -replace '\\', '/')
+                        if ($myText -match '(?m)^\s*datadir\s*=.*') {
+                            $myText = $myText -replace '(?m)^\s*datadir\s*=.*', "datadir= `"$normData`""
+                        } elseif ($myText -match '\[mysqld\]') {
+                            $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1datadir= `"$normData`"`r`n"
+                        }
+
+                        # Simpan berkas my.ini terlebih dahulu (ASCII Non-BOM) sebelum pra-inisialisasi
+                        try {
+                            [System.IO.File]::WriteAllText($lMyIni, $myText, [System.Text.Encoding]::ASCII)
+                        } catch {
+                            Set-Content -Path $lMyIni -Value $myText -Encoding Ascii -Force
+                        }
+
+                        # 3. Pra-inisialisasi database sistem jika data directory belum siap / korup
+                        $ibdFile = Join-Path -Path $validData -ChildPath "mysql.ibd"
+                        $isDataReady = (Test-Path -Path $ibdFile) -and ((Get-Item -Path $ibdFile -ErrorAction SilentlyContinue).Length -gt 10000000)
                         if (-not $isDataReady) {
                             $mysqldBin = Join-Path -Path $d.Path -ChildPath "bin\mysqld.exe"
                             if (Test-Path -Path $mysqldBin) {
                                 Write-LogInfo "Melakukan pra-inisialisasi database MySQL ($leaf) secara aman..."
-                                $normData = ($validData -replace '\\', '/')
                                 Get-Process -Name "mysqld", "mysql" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-                                # Jika ada residu setengah jadi, bersihkan agar inisialisasi sukses 100%
                                 Remove-Item -Path "$validData\*" -Recurse -Force -ErrorAction SilentlyContinue
                                 Start-Process -FilePath $mysqldBin -ArgumentList "--no-defaults --initialize-insecure --datadir=`"$normData`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue
                                 Write-LogSuccess "Database MySQL ($leaf) berhasil diinisialisasi! Siap start instan."
                             }
                         }
 
-                        if ($validData) {
-                            $normData = ($validData -replace '\\', '/')
-                            if ($myText -match '(?m)^\s*datadir\s*=.*') {
-                                $myText = $myText -replace '(?m)^\s*datadir\s*=.*', "datadir=`"$normData`""
-                            } elseif ($myText -match '\[mysqld\]') {
-                                $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1datadir=`"$normData`"`r`n"
-                            }
-                        }
-
+                        # 4. Kunci my.ini dengan atribut Read-Only agar GUI Laragon tidak dapat menginjeksi default_authentication_plugin
                         try {
-                            [System.IO.File]::WriteAllText($lMyIni, $myText, [System.Text.Encoding]::ASCII)
-                        } catch {
-                            Set-Content -Path $lMyIni -Value $myText -Encoding Ascii -Force
-                        }
-                        Write-LogSuccess "Konfigurasi MySQL Laragon ($lMyIni) diselaraskan (Port 3306, bind 0.0.0.0, ASCII Non-BOM, Bebas Error Crash)."
+                            [System.IO.File]::SetAttributes($lMyIni, [System.IO.FileAttributes]::ReadOnly)
+                            cmd.exe /c "attrib +r `"$lMyIni`" >nul 2>&1"
+                        } catch {}
+                        Write-LogSuccess "Konfigurasi MySQL Laragon ($lMyIni) diselaraskan (Port 3306, datadir $targetDataDirName, ReadOnly Anti-Tamper)."
                     } catch {
                         Write-LogWarning "Tidak dapat menyelaraskan $lMyIni : $($_.Exception.Message)"
                     }
