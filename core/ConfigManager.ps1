@@ -1159,8 +1159,15 @@ server {
                         $isMysql84OrHigher = ($d.Path -match '(?i)mysql-(?:8\.[4-9]|[9-9]|\d{2,})\.')
 
                         if ($isMysql84OrHigher) {
-                            # Hapus opsi deprecated yang menyebabkan mysqld aborting di MySQL 8.4+ / 9.x
-                            $myText = $myText -replace '(?m)^\s*default_authentication_plugin\s*=.*(\r?\n)?', ''
+                            # Trik Kritis Laragon: Jika baris default_authentication_plugin dihapus total,
+                            # laragon.exe akan mendeteksi opsi hilang dan menginjeksi ulang default_authentication_plugin yang memicu crash!
+                            # Oleh karena itu, kita beri komentar tanda pagar (# ) agar Laragon tidak menginjeksi ulang,
+                            # sekaligus MySQL 8.4+/9.x mengabaikannya sebagai komentar dan tidak aborting saat startup.
+                            if ($myText -match '(?m)^\s*default_authentication_plugin\s*=.*') {
+                                $myText = $myText -replace '(?m)^\s*default_authentication_plugin\s*=.*', '# default_authentication_plugin=mysql_native_password'
+                            } elseif ($myText -notmatch 'default_authentication_plugin') {
+                                $myText = $myText -replace '(\[mysqld\]\r?\n)', "`$1# default_authentication_plugin=mysql_native_password`r`n"
+                            }
                         } else {
                             # MySQL 8.0 ke bawah mendukung default_authentication_plugin
                             if ($myText -notmatch 'default_authentication_plugin') {
