@@ -1170,14 +1170,22 @@ server {
 
                         # Pastikan folder data sesuai yang ada di sistem
                         $leaf = Split-Path -Leaf $d.Path
+                        $existingDataDir = $null
+                        if ($myText -match '(?m)^\s*datadir\s*=\s*"?([^"\r\n]+)"?') {
+                            $extracted = $matches[1].Trim().Replace('/', '\')
+                            if (Test-Path -Path $extracted) { $existingDataDir = $extracted }
+                        }
+
                         $candData = @(
+                            $existingDataDir,
                             (Join-Path -Path $laragonDir -ChildPath "data\$leaf"),
+                            (Join-Path -Path $laragonDir -ChildPath "data\mysql-9"),
                             (Join-Path -Path $laragonDir -ChildPath "data\mysql-8"),
                             (Join-Path -Path $laragonDir -ChildPath "data\mysql")
                         )
                         $validData = $null
                         foreach ($cd in $candData) {
-                            if (Test-Path -Path $cd) {
+                            if ($cd -and (Test-Path -Path $cd)) {
                                 $validData = $cd
                                 break
                             }
@@ -1189,14 +1197,17 @@ server {
                             }
                         }
 
-                        # Pra-inisialisasi database sistem jika data directory masih kosong / belum diinisialisasi
-                        $isDataReady = (Test-Path -Path (Join-Path -Path $validData -ChildPath "mysql")) -or (Test-Path -Path (Join-Path -Path $validData -ChildPath "ibdata1"))
+                        # Pra-inisialisasi database sistem jika data directory masih kosong atau korup (tabel mysql.plugin hilang)
+                        $mysqlDbFolder = Join-Path -Path $validData -ChildPath "mysql"
+                        $isDataReady = (Test-Path -Path $mysqlDbFolder) -and ((Get-ChildItem -Path $mysqlDbFolder -ErrorAction SilentlyContinue).Count -gt 5)
                         if (-not $isDataReady) {
                             $mysqldBin = Join-Path -Path $d.Path -ChildPath "bin\mysqld.exe"
                             if (Test-Path -Path $mysqldBin) {
                                 Write-LogInfo "Melakukan pra-inisialisasi database MySQL ($leaf) secara aman..."
                                 $normData = ($validData -replace '\\', '/')
                                 Get-Process -Name "mysqld", "mysql" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                                # Jika ada residu setengah jadi, bersihkan agar inisialisasi sukses 100%
+                                Remove-Item -Path "$validData\*" -Recurse -Force -ErrorAction SilentlyContinue
                                 Start-Process -FilePath $mysqldBin -ArgumentList "--no-defaults --initialize-insecure --datadir=`"$normData`"" -NoNewWindow -Wait -ErrorAction SilentlyContinue
                                 Write-LogSuccess "Database MySQL ($leaf) berhasil diinisialisasi! Siap start instan."
                             }
