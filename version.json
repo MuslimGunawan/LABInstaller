@@ -1,7 +1,7 @@
 ﻿{
-  "version": "1.0.51",
+  "version": "1.0.52",
   "name": "LABInstaller",
   "author": "MuslimGunawan",
   "releaseDate": "2026-10-30",
-  "description": "v1.0.51: Hotfix Kritis PC Lab. (1) Memperbaiki Test-PackagePhysicalPresence agar parameter RegistryMatch bersifat opsional ($RegistryMatch = $null), meniadakan hang/prompt interaktif saat verifikasi XAMPP; (2) Penambahan penghentian agresif untuk proses background/service (postgres, pg_ctl, redis, memcached) dan auto-kill proses pengunci folder serta permission takeover (takeown/icacls) pada clean purge agar bebas error Access is denied; (3) Integrasi otomatis Configure-WebServerPorts ke Setup-LaragonEnvironment, penyesuaian bind-address 0.0.0.0, eliminasi crash default_authentication_plugin pada MySQL 8.4+/9.x, serta pra-inisialisasi database (--initialize-insecure) sehingga MySQL langsung siap start instan dan phpMyAdmin terhubung tanpa error koneksi ditolak."
+  "description": "v1.0.52: Solusi Definitif Stack Laragon MySQL & Lab Deployment. (1) Eliminasi prompt interaktif Test-PackagePhysicalPresence pada instalasi XAMPP; (2) Pembersihan total daemon PostgreSQL, Redis, Memcached & permission takeover bebas error Access is denied; (3) Trik anti-injeksi Laragon my.ini (# default_authentication_plugin) & penguncian ReadOnly pada MySQL 8.4 LTS dan MySQL 9.x agar tidak aborting; (4) Pra-inisialisasi database sistem (--initialize-insecure) instan 0.5 detik; (5) Mode fallback otomatis ke Laragon 6.0.0 resmi jika mirror kustom offline/limit."
 }
