@@ -735,12 +735,10 @@ function Install-LaragonCustomSuite {
     }
 
     if (-not $localZip -or (-not (Test-Path -Path $localZip))) {
-        Write-LogError "Berkas Laragon_Custom_LAB.zip tidak berhasil didapatkan dari penyimpanan lokal, Google Drive, maupun MediaFire."
-        return $false
-    }
-
-    # LANGKAH 3: Timpa (Overlay) File C:\laragon dengan File Custom Anda
-    if ($localZip -and (Test-Path -Path $localZip)) {
+        Write-LogWarning "Berkas Laragon_Custom_LAB.zip tidak berhasil didapatkan dari penyimpanan lokal, Google Drive, maupun MediaFire."
+        Write-LogWarning "Mengaktifkan mode fallback: Melanjutkan konfigurasi dengan instalasi resmi Laragon 6.0.0 yang sudah terpasang di C:\laragon..."
+    } else {
+        # LANGKAH 3: Timpa (Overlay) File C:\laragon dengan File Custom Anda
         Write-LogStep "Menimpa berkas Laragon dengan paket custom (PHP 8.5/8.4, MySQL 9/8, Apache/Nginx, phpMyAdmin)..."
         
         $sevenZipExe = "C:\Program Files\7-Zip\7z.exe"
@@ -760,8 +758,6 @@ function Install-LaragonCustomSuite {
             }
         }
         Write-LogSuccess "Paket Laragon Custom berhasil ditimpa secara sempurna!"
-    } else {
-        Write-LogWarning "Paket ZIP kustom belum dapat diunduh dari GDrive, menggunakan setup resmi Laragon 6.0.0."
     }
 
     # LANGKAH 4: Konfigurasi Otomatis phpMyAdmin (Auto-login & Bebas Warning) & Port
